@@ -38,24 +38,24 @@
         <article class="markdown-body">
           <h2>What is HELIX</h2>
 
-<p>Helix is a generic cluster management framework used for automatic management of partitioned, replicated and distributed resources hosted on a group of nodes(cluster). Helix provides the following features </p>
+<p>Helix is a generic cluster management framework used for automatic management of partitioned, replicated and distributed resources hosted on a cluster of nodes. Helix provides the following features </p>
 
 <ol>
 <li>Automatic assignment of resource/partition to nodes</li>
-<li>Node Failure detection and recovery</li>
-<li>Dynamic addition of Resources </li>
-<li>Dynamic Addition of nodes to the cluster</li>
+<li>Node failure detection and recovery</li>
+<li>Dynamic addition of resources </li>
+<li>Dynamic addition of nodes to the cluster</li>
 <li>Pluggable distributed state machine to manage the state of a resource via state transitions</li>
-<li>Automatic Load balancing and throttling of transitions </li>
-</ol><hr><h2>Overview</h2>
+<li>Automatic load balancing and throttling of transitions </li>
+</ol><hr>
+
+<h2>Overview</h2>
 
 <p>Helix uses terms that are commonly used to describe distributed data system concepts. </p>
 
 <ol>
 <li>Cluster: A logical set of Instances that perform similar set of activities. </li>
-<li>Instance/Node: Instance is logical entity in a cluster. Node is the physical entity in the cluster. A node can have one or more logical Instances. 
-Node and Instance are used interchangeably. Each Instance in the cluster is identified by a unique id. 
-Most commonly used convention is hostname_port where hostname is the FQDN(Fully qualified Domain Name) and port is the port where the service is hosted. </li>
+<li>Instance/Node: An Instance is a logical entity in the cluster that can be identified by a unique Id. A Node is a physical entity in the cluster. A Node can have one or more logical Instances. </li>
 <li>Resource: A resource represents the logical entity hosted by the distributed system. It can be a database name, index or a task group name </li>
 <li>Partition: A resource is generally split into one or partitions.</li>
 <li>Replica: Each partition can have one or more replicas</li>
