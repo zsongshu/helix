@@ -1,1 +1,147 @@
-My GitHub Page
+<!doctype html>
+<!-- The Time Machine GitHub pages theme was designed and developed by Jon Rohan, on Feb 7, 2012. -->
+<!-- Follow him for fun. http://twitter.com/jonrohan. Tail his code on http://github.com/jonrohan -->
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+
+  <link rel="stylesheet" href="stylesheets/stylesheet.css" media="screen"/>
+  <link rel="stylesheet" href="stylesheets/pygment_trac.css"/>
+  <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+  <script type="text/javascript" src="javascripts/script.js"></script>
+
+  <title>Helix</title>
+  <meta name="description" content="A generic cluster management framework used for automatic management of partitioned, replicated and distributed resources hosted on a group of nodes( cluster)">
+
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+
+</head>
+
+<body>
+
+  <div class="wrapper">
+    <header>
+      <h1 class="title">Helix</h1>
+    </header>
+    <div id="container">
+      <p class="tagline">A generic cluster management framework used for automatic management of partitioned, replicated and distributed resources hosted on a group of nodes( cluster)</p>
+      <div id="main" role="main">
+        <div class="download-bar">
+        <div class="inner">
+          <a href="https://github.com/linkedin/helix/tarball/master" class="download-button tar"><span>Download</span></a>
+          <a href="https://github.com/linkedin/helix/zipball/master" class="download-button zip"><span>Download</span></a>
+          <a href="https://github.com/linkedin/helix" class="code">View Helix on GitHub</a>
+        </div>
+        <span class="blc"></span><span class="trc"></span>
+        </div>
+        <article class="markdown-body">
+          <h2>WHAT IS HELIX</h2>
+
+<p>Helix is a generic cluster management framework used for automatic management of partitioned, replicated and distributed resources hosted on a group of nodes( cluster). Helix provides the following features </p>
+
+<ol>
+<li>Automatic assignment of resource/partition to nodes</li>
+<li>Node Failure detection and recovery</li>
+<li>Dynamic addition of Resources </li>
+<li>Dynamic Addition of nodes to the cluster</li>
+<li>Pluggable distributed state machine to manage the state of a resource via state transitions</li>
+<li>Automatic Load balancing and throttling of transitions </li>
+</ol><hr><p>A resource (for eg a database, lucene index or any task) in general is partitioned, replicated and distributed among the nodes in the cluster. </p>
+
+<p>Each partition of a resource can have a state associated with it. Here are some common state models used</p>
+
+<ol>
+<li>Master, Slave</li>
+<li>Online, Offline</li>
+<li>Leader, Standby.</li>
+</ol><p>Helix manages the state of a resource by supporting a pluggable distributed state machine. One can define the state machine table along with the constraints for each state. For example in case of a MasterSlave state model one can specify the state machine as</p>
+
+<pre><code>
+          OFFLINE  | SLAVE  |  MASTER  
+         _____________________________
+        |          |        |         |
+OFFLINE |   N/A    | SLAVE  | SLAVE   |
+        |__________|________|_________|
+        |          |        |         |
+SLAVE   |  OFFLINE |   N/A  | MASTER  |
+        |__________|________|_________|
+        |          |        |         |
+MASTER  | SLAVE    | SLAVE  |   N/A   |
+        |__________|________|_________|
+
+</code></pre>
+
+<p>Helix also supports the ability to provide constraints on each state. For example in a MasterSlave state model with a replication factor of 3 one can say </p>
+
+<pre><code>MASTER:1 
+SLAVE:2
+</code></pre>
+
+<p>Helix will automatically try to maintain 1 Master and 2 Slaves by initiating appropriate state transitions in the cluster. </p>
+
+<p>Each transition results in a partition moving from its CURRENT state state to an NEW state. These transitions are triggered on changes in the cluster state like </p>
+
+<ul>
+<li>Node start up</li>
+<li>Node soft and hard failures </li>
+<li>Addition of resources</li>
+<li>Addition of nodes</li>
+</ul><hr><p>With these features, Helix framework can be used to build distributed, scalable, elastic and fault tolerant systems by configuring the distributed state machine and its constraints based on application requirement. Application has to provide the implementation for handling state transitions appropriately. Example </p>
+
+<pre><code>
+MasterSlaveStateModel extends HelixStateModel {
+
+  void onOfflineToSlave(Message m, NotificationContext context){
+    print("Transitioning from Offline to Slave for database:"+ m.resourceGroup + " and partition:"+ m.resourceKey);
+  }
+  void onSlaveToMaster(Message m, NotificationContext context){
+    print("Transitioning from Slave to Master for database:"+ m.resourceGroup + " and partition:"+ m.resourceKey);
+  }
+  void onMasterToSlave(Message m, NotificationContext context){
+    print("Transitioning from Master to Slave for database:"+ m.resourceGroup + " and partition:"+ m.resourceKey);
+  }
+  void onSlaveToOffline(Message m, NotificationContext context){
+    print("Transitioning from Slave to Offline for database:"+ m.resourceGroup + " and partition:"+ m.resourceKey);
+  }
+
+}
+
+</code></pre>
+
+<p>The only thing users have to now worry about is handling the transitions appropriately.</p>
+
+<p>Helix uses Zookeeper for maintaining the cluster state and change notification.</p>
+
+<hr><h2>Additional Info</h2>
+
+<p>Documentation: <a href="https://github.com/linkedin/helix/wiki/Home">Home</a><br>
+Sample App using Helix: <a href="https://github.com/linkedin/helix/wiki/Sample_App">rabbitmq-consumer-group</a><br>
+Quickstart guide: <a href="https://github.com/linkedin/helix/wiki/Quickstart">How to build and run a mock example</a><br>
+Architecture: <a href="https://github.com/linkedin/helix/wiki/Architecture">Helix Architecture</a><br>
+Features: <a href="https://github.com/linkedin/helix/wiki/Features">Helix Features</a><br>
+ApiUsage: <a href="http://linkedin.github.com/helix/apidocs/">http://linkedin.github.com/helix/apidocs/</a>
+UseCases: <a href="https://github.com/linkedin/helix/wiki/UseCases">Helix LinkedIn Usecases</a>  </p>
+        </article>
+      </div>
+    </div>
+    <footer>
+      <div class="owner">
+      <p><a href="https://github.com/linkedin" class="avatar"><img src="https://secure.gravatar.com/avatar/344449f21a57e790db8361d7970b731a?s=30&amp;d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png" width="48" height="48"/></a> <a href="https://github.com/linkedin">linkedin</a> maintains <a href="https://github.com/linkedin/helix">Helix</a></p>
+
+
+      </div>
+      <div class="creds">
+        <small>This page generated using <a href="https://pages.github.com/">GitHub Pages</a><br/>theme by <a href="http://twitter.com/jonrohan/">Jon Rohan</a></small>
+      </div>
+    </footer>
+  </div>
+  <div class="current-section">
+    <a href="#top">Scroll to top</a>
+    <a href="https://github.com/linkedin/helix/tarball/master" class="tar">tar</a><a href="https://github.com/linkedin/helix/zipball/master" class="zip">zip</a><a href="" class="code">source code</a>
+    <p class="name"></p>
+  </div>
+
+  
+</body>
+</html>
