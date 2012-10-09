@@ -54,12 +54,12 @@
 <p>Helix uses terms that are commonly used to describe distributed data system concepts. </p>
 
 <ol>
-<li>Cluster: A logical set of Instances that perform similar set of activities. </li>
-<li>Instance/Node: An Instance is a logical entity in the cluster that can be identified by a unique Id. A Node is a physical entity in the cluster. A Node can have one or more logical Instances. </li>
-<li>Resource: A resource represents the logical entity hosted by the distributed system. It can be a database name, index or a task group name </li>
-<li>Partition: A resource is generally split into one or partitions.</li>
-<li>Replica: Each partition can have one or more replicas</li>
-<li>State: Each replicas can have state associated with it. For example: Master, Slave, Leader, Stand By, Offline, Online etc. </li>
+<li><em>Cluster</em>: A logical set of Instances that perform similar set of activities. </li>
+<li><em>Instance/Node</em>: An Instance is a logical entity in the cluster that can be identified by a unique Id. A Node is a physical entity in the cluster. A Node can have one or more logical Instances. </li>
+<li><em>Resource</em>: A resource represents the logical entity hosted by the distributed system. It can be a database name, index or a task group name </li>
+<li><em>Partition</em>: A resource is generally split into one or partitions.</li>
+<li><em>Replica</em>: Each partition can have one or more replicas</li>
+<li><em>State</em>: Each replicas can have state associated with it. For example: Master, Slave, Leader, Stand By, Offline, Online etc. </li>
 </ol><p>To summarize, A resource (Database, Index or any task) in general is partitioned, replicated and distributed among the Instance/nodes in the cluster and each partition has a state associated with it. </p>
 
 <p>Helix manages the state of a resource by supporting a pluggable distributed state machine. One can define the state machine table along with the constraints for each state. </p>
