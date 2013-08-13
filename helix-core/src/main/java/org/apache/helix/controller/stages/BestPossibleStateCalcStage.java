@@ -32,6 +32,7 @@ import java.util.TreeMap;
 import org.apache.helix.HelixConstants;
 import org.apache.helix.HelixDefinedState;
 import org.apache.helix.HelixManager;
+import org.apache.helix.HelixManagerProperties;
 import org.apache.helix.ZNRecord;
 import org.apache.helix.HelixConstants.StateModelToken;
 import org.apache.helix.controller.pipeline.AbstractBaseStage;
@@ -49,7 +50,7 @@ import org.apache.log4j.Logger;
 /**
  * For partition compute best possible (instance,state) pair based on
  * IdealState,StateModel,LiveInstance
- * 
+ *
  */
 // TODO: refactor this
 public class BestPossibleStateCalcStage extends AbstractBaseStage
@@ -131,7 +132,7 @@ public class BestPossibleStateCalcStage extends AbstractBaseStage
                                         currentStateOutput);
       }
 
-      
+
       for (Partition partition : resource.getPartitions())
       {
         Map<String, String> currentStateMap =
@@ -150,20 +151,22 @@ public class BestPossibleStateCalcStage extends AbstractBaseStage
                                                      stateModelDef,
                                                      idealStateMap,
                                                      currentStateMap,
-                                                     disabledInstancesForPartition);
+                                                     disabledInstancesForPartition,
+                                                     manager.getProperties());
         }
         else
         // both AUTO and AUTO_REBALANCE mode
         {
           List<String> instancePreferenceList =
               getPreferenceList(cache, partition, idealState, stateModelDef);
-          
+
           bestStateForPartition =
               computeAutoBestStateForPartition(cache,
                                                stateModelDef,
                                                instancePreferenceList,
                                                currentStateMap,
-                                               disabledInstancesForPartition);
+                                               disabledInstancesForPartition,
+                                               manager.getProperties());
         }
         output.setState(resourceName, partition, bestStateForPartition);
       }
@@ -175,7 +178,7 @@ public class BestPossibleStateCalcStage extends AbstractBaseStage
    * Compute best state for resource in AUTO_REBALANCE ideal state mode. the algorithm
    * will make sure that the master partition are evenly distributed; Also when instances
    * are added / removed, the amount of diff in master partitions are minimized
-   * 
+   *
    * @param cache
    * @param idealState
    * @param instancePreferenceList
@@ -191,7 +194,7 @@ public class BestPossibleStateCalcStage extends AbstractBaseStage
     String topStateValue = stateModelDef.getStatesPriorityList().get(0);
     Set<String> liveInstances = cache._liveInstanceMap.keySet();
     Set<String> taggedInstances = new HashSet<String>();
-    
+
     // If there are instances tagged with resource name, use only those instances
     if(idealState.getInstanceGroupTag() != null)
     {
@@ -275,7 +278,7 @@ public class BestPossibleStateCalcStage extends AbstractBaseStage
   /**
    * Given the current master assignment map and the partitions not hosted, generate an
    * evenly distributed partition assignment map
-   * 
+   *
    * @param masterAssignmentMap
    *          current master assignment map
    * @param orphanPartitions
@@ -342,7 +345,7 @@ public class BestPossibleStateCalcStage extends AbstractBaseStage
   /**
    * Generate full preference list from the master assignment map evenly distribute the
    * slave partitions mastered on a host to other hosts
-   * 
+   *
    * @param masterAssignmentMap
    *          current master assignment map
    * @param orphanPartitions
@@ -387,8 +390,36 @@ public class BestPossibleStateCalcStage extends AbstractBaseStage
   }
 
   /**
+   * Is participant version support error->dropped transition
+   */
+  private boolean isDropErrorSupported(HelixManagerProperties properties,
+                                       ClusterDataCache cache,
+                                       String instance)
+  {
+    if (properties == null)
+    {
+      return false;
+    }
+
+    LiveInstance liveInstance = cache.getLiveInstances().get(instance);
+    String participantVersion = null;
+    if (liveInstance != null) {
+      participantVersion = liveInstance.getHelixVersion();
+    }
+
+    return properties.isFeatureSupported("drop_error_partition", participantVersion);
+  }
+
+  private boolean isNotError(Map<String, String> currentStateMap, String instance)
+  {
+    return currentStateMap == null
+        || currentStateMap.get(instance) == null
+        || !currentStateMap.get(instance).equals(HelixDefinedState.ERROR.toString());
+  }
+
+  /**
    * compute best state for resource in AUTO ideal state mode
-   * 
+   *
    * @param cache
    * @param stateModelDef
    * @param instancePreferenceList
@@ -401,7 +432,8 @@ public class BestPossibleStateCalcStage extends AbstractBaseStage
                                                                StateModelDefinition stateModelDef,
                                                                List<String> instancePreferenceList,
                                                                Map<String, String> currentStateMap,
-                                                               Set<String> disabledInstancesForPartition)
+                                                               Set<String> disabledInstancesForPartition,
+                                                               HelixManagerProperties properties)
   {
     Map<String, String> instanceStateMap = new HashMap<String, String>();
 
@@ -411,15 +443,19 @@ public class BestPossibleStateCalcStage extends AbstractBaseStage
     {
       for (String instance : currentStateMap.keySet())
       {
+        boolean isDropErrorSupported = isDropErrorSupported(properties, cache, instance);
+        boolean isNotError = isNotError(currentStateMap, instance);
+
         if ((instancePreferenceList == null || !instancePreferenceList.contains(instance))
             && !disabledInstancesForPartition.contains(instance))
         {
-          // if dropped and not disabled, transit to DROPPED
-          instanceStateMap.put(instance, HelixDefinedState.DROPPED.toString());
+          if (isDropErrorSupported || isNotError)
+          {
+            // if dropped and not disabled, transit to DROPPED
+            instanceStateMap.put(instance, HelixDefinedState.DROPPED.toString());
+          }
         }
-        else if ( (currentStateMap.get(instance) == null 
-            || !currentStateMap.get(instance).equals(HelixDefinedState.ERROR.toString()))
-            && disabledInstancesForPartition.contains(instance))
+        else if ( isNotError && disabledInstancesForPartition.contains(instance))
         {
           // if disabled and not in ERROR state, transit to initial-state (e.g. OFFLINE)
           instanceStateMap.put(instance, stateModelDef.getInitialState());
@@ -470,9 +506,7 @@ public class BestPossibleStateCalcStage extends AbstractBaseStage
         {
           String instanceName = instancePreferenceList.get(i);
 
-          boolean notInErrorState = currentStateMap == null 
-              || currentStateMap.get(instanceName) == null
-              || !currentStateMap.get(instanceName).equals(HelixDefinedState.ERROR.toString());
+          boolean notInErrorState = isNotError(currentStateMap, instanceName);
 
           if (liveInstancesMap.containsKey(instanceName) && !assigned[i]
               && notInErrorState && !disabledInstancesForPartition.contains(instanceName))
@@ -493,7 +527,7 @@ public class BestPossibleStateCalcStage extends AbstractBaseStage
 
   /**
    * compute best state for resource in CUSTOMIZED ideal state mode
-   * 
+   *
    * @param cache
    * @param stateModelDef
    * @param idealStateMap
@@ -505,7 +539,8 @@ public class BestPossibleStateCalcStage extends AbstractBaseStage
                                                                      StateModelDefinition stateModelDef,
                                                                      Map<String, String> idealStateMap,
                                                                      Map<String, String> currentStateMap,
-                                                                     Set<String> disabledInstancesForPartition)
+                                                                     Set<String> disabledInstancesForPartition,
+                                                                     HelixManagerProperties properties)
   {
     Map<String, String> instanceStateMap = new HashMap<String, String>();
 
@@ -515,15 +550,19 @@ public class BestPossibleStateCalcStage extends AbstractBaseStage
     {
       for (String instance : currentStateMap.keySet())
       {
+        boolean isDropErrorSupported = isDropErrorSupported(properties, cache, instance);
+        boolean isNotError = isNotError(currentStateMap, instance);
+
         if ((idealStateMap == null || !idealStateMap.containsKey(instance))
             && !disabledInstancesForPartition.contains(instance))
         {
-          // if dropped and not disabled, transit to DROPPED
-          instanceStateMap.put(instance, HelixDefinedState.DROPPED.toString());
+          if (isDropErrorSupported || isNotError)
+          {
+            // if dropped and not disabled, transit to DROPPED
+            instanceStateMap.put(instance, HelixDefinedState.DROPPED.toString());
+          }
         }
-        else if ( (currentStateMap.get(instance) == null 
-            || !currentStateMap.get(instance).equals(HelixDefinedState.ERROR.toString()))
-            && disabledInstancesForPartition.contains(instance))
+        else if (isNotError && disabledInstancesForPartition.contains(instance))
         {
           // if disabled and not in ERROR state, transit to initial-state (e.g. OFFLINE)
           instanceStateMap.put(instance, stateModelDef.getInitialState());
@@ -540,9 +579,7 @@ public class BestPossibleStateCalcStage extends AbstractBaseStage
     Map<String, LiveInstance> liveInstancesMap = cache.getLiveInstances();
     for (String instance : idealStateMap.keySet())
     {
-      boolean notInErrorState = currentStateMap == null 
-          || currentStateMap.get(instance) == null
-          || !currentStateMap.get(instance).equals(HelixDefinedState.ERROR.toString());
+      boolean notInErrorState = isNotError(currentStateMap, instance);
 
       if (liveInstancesMap.containsKey(instance) && notInErrorState
           && !disabledInstancesForPartition.contains(instance))

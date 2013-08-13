@@ -41,6 +41,8 @@ import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.helix.HelixDataAccessor;
 import org.apache.helix.HelixDefinedState;
+import org.apache.helix.HelixManager;
+import org.apache.helix.InstanceType;
 import org.apache.helix.PropertyPathConfig;
 import org.apache.helix.PropertyType;
 import org.apache.helix.ZNRecord;
@@ -55,6 +57,7 @@ import org.apache.helix.controller.stages.ClusterEvent;
 import org.apache.helix.controller.stages.CurrentStateComputationStage;
 import org.apache.helix.controller.stages.ResourceComputationStage;
 import org.apache.helix.manager.zk.ZKHelixDataAccessor;
+import org.apache.helix.manager.zk.ZKHelixManager;
 import org.apache.helix.manager.zk.ZkBaseDataAccessor;
 import org.apache.helix.manager.zk.ZkClient;
 import org.apache.helix.model.ExternalView;
@@ -179,7 +182,10 @@ public class ClusterStateVerifier
             new ZKHelixDataAccessor(clusterName,
                                     new ZkBaseDataAccessor<ZNRecord>(zkClient));
 
-        return ClusterStateVerifier.verifyBestPossAndExtView(accessor, errStates);
+        return ClusterStateVerifier.verifyBestPossAndExtView(zkAddr,
+                                                             clusterName,
+                                                             accessor,
+                                                             errStates);
       }
       catch (Exception e)
       {
@@ -259,7 +265,9 @@ public class ClusterStateVerifier
 
   }
 
-  static boolean verifyBestPossAndExtView(HelixDataAccessor accessor,
+  static boolean verifyBestPossAndExtView(String zkAddr,
+                                          String clusterName,
+                                          HelixDataAccessor accessor,
                                           Map<String, Map<String, String>> errStates)
   {
     try
@@ -292,10 +300,10 @@ public class ClusterStateVerifier
           idealStates.put(resource, new IdealState(resource));
         }
       }
-      
+
       // calculate best possible state
       BestPossibleStateOutput bestPossOutput =
-          ClusterStateVerifier.calcBestPossState(cache);
+          ClusterStateVerifier.calcBestPossState(zkAddr, clusterName, cache);
       Map<String, Map<Partition, Map<String, String>>> bestPossStateMap = bestPossOutput.getStateMap();
 
       // set error states
@@ -307,7 +315,7 @@ public class ClusterStateVerifier
           for (String partitionName : partErrStates.keySet())
           {
             String instanceName = partErrStates.get(partitionName);
-            
+
             if (!bestPossStateMap.containsKey(resourceName)) {
               bestPossStateMap.put(resourceName, new HashMap<Partition, Map<String, String>>());
             }
@@ -319,10 +327,10 @@ public class ClusterStateVerifier
           }
         }
       }
-      
+
       // System.out.println("stateMap: " + bestPossStateMap);
 
-      
+
       for (String resourceName : idealStates.keySet())
       {
         ExternalView extView = extViews.get(resourceName);
@@ -355,7 +363,7 @@ public class ClusterStateVerifier
               if (state.equalsIgnoreCase(HelixDefinedState.DROPPED.toString()))
               {
                 insIter.remove();
-              }   
+              }
             }
           }
         }
@@ -370,7 +378,7 @@ public class ClusterStateVerifier
           LOG.info("exterView size (" + extViewSize
               + ") is different from bestPossState size (" + bestPossStateSize
               + ") for resource: " + resourceName);
-          
+
 //          System.err.println("exterView size (" + extViewSize
 //              + ") is different from bestPossState size (" + bestPossStateSize
 //              + ") for resource: " + resourceName);
@@ -395,7 +403,7 @@ public class ClusterStateVerifier
           {
             LOG.info("externalView is different from bestPossibleState for partition:"
                 + partition);
-            
+
 //            System.err.println("externalView is different from bestPossibleState for partition: "
 //                + partition + ", actual: " + evInstanceStateMap + ", bestPoss: " + bpInstanceStateMap);
             return false;
@@ -477,16 +485,18 @@ public class ClusterStateVerifier
   /**
    * calculate the best possible state note that DROPPED states are not checked since when
    * kick off the BestPossibleStateCalcStage we are providing an empty current state map
-   * 
+   *
    * @param cache
    * @return
    * @throws Exception
    */
 
-  static BestPossibleStateOutput calcBestPossState(ClusterDataCache cache) throws Exception
+  static BestPossibleStateOutput calcBestPossState(String zkAddr, String clusterName, ClusterDataCache cache) throws Exception
   {
     ClusterEvent event = new ClusterEvent("sampleEvent");
     event.addAttribute("ClusterDataCache", cache);
+    HelixManager manager = new ZKHelixManager(clusterName, "verifier", InstanceType.SPECTATOR, zkAddr);
+    event.addAttribute("helixmanager", manager);
 
     ResourceComputationStage rcState = new ResourceComputationStage();
     CurrentStateComputationStage csStage = new CurrentStateComputationStage();
