@@ -30,6 +30,7 @@ under the License.
   <name>Apache Helix :: Recipes</name>
 
   <modules>
+    <module>auto-scale</module>
     <module>rabbitmq-consumer-group</module>
     <module>rsync-replicated-file-system</module>
     <module>distributed-lock-manager</module>

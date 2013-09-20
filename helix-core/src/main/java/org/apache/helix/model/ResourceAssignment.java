@@ -25,6 +25,8 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.helix.HelixProperty;
+import org.apache.helix.ZNRecord;
+
 
 /**
  * Represents the assignments of replicas for an entire resource, keyed on partitions of the
@@ -48,11 +50,23 @@ public class ResourceAssignment extends HelixProperty {
   }
 
   /**
+   * Initialize a mapping from a {@link ZNRecord}.
+   * @param record The underlying ZNRecord.
+   */
+  public ResourceAssignment(ZNRecord record) {
+    super(record);
+  }
+
+  /**
    * Initialize a mapping from an existing ResourceMapping
    * @param existingMapping pre-populated ResourceMapping
    */
   public ResourceAssignment(ResourceAssignment existingMapping) {
     super(existingMapping);
+  }
+
+  public String getResourceName() {
+    return _record.getId();
   }
 
   /**
