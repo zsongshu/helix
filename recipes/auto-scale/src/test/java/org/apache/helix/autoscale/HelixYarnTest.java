@@ -49,6 +49,8 @@ public class HelixYarnTest {
     	TargetProviderService targetProvider = getTargetProviderService(applicationSpec);
         TestUtils.startTestCluster(targetProvider, _containerStatusProvider, _containerProvider);
 
+        TestUtils.admin.addResource(TestUtils.managedClusterName, WorkflowGenerator.DEFAULT_TGT_DB, 2, "MasterSlave");
+        
     	HelixManager taskClusterManager = HelixManagerFactory.getZKHelixManager(TestUtils.managedClusterName, 
     			"Admin", InstanceType.ADMINISTRATOR, TestUtils.zkAddress);
     	taskClusterManager.connect();

@@ -21,14 +21,14 @@ public abstract class ContainerProcess implements Service {
     static final Logger                             log    = Logger.getLogger(ContainerProcess.class);
 
     private ContainerProcessProperties              properties;
-    private HelixManager                            participantManager;
+    protected HelixManager                            participantManager;
 
-    private String                                  modelName;
-    private StateModelFactory<? extends StateModel> modelFactory;
+    protected String                                  modelName;
+    protected StateModelFactory<? extends StateModel> modelFactory;
 
-    private String                                  instanceName;
-    private String                                  clusterName;
-    private String                                  zookeeperAddress;
+    protected String                                  instanceName;
+    protected String                                  clusterName;
+    protected String                                  zookeeperAddress;
 
     private boolean                                 active = false;
     private boolean                                 failed = false;
@@ -76,7 +76,7 @@ public abstract class ContainerProcess implements Service {
 
     protected abstract void startContainer() throws Exception;
 
-    private final void startParticipant() throws Exception {
+    protected void startParticipant() throws Exception {
         participantManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName, InstanceType.PARTICIPANT, zookeeperAddress);
         participantManager.getStateMachineEngine().registerStateModelFactory(modelName, modelFactory);
         participantManager.connect();

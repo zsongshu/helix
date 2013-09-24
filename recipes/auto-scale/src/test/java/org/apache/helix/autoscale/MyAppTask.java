@@ -2,14 +2,10 @@ package org.apache.helix.autoscale;
 
 import java.util.Properties;
 
+import org.apache.helix.task.Task;
 import org.apache.helix.task.TaskResult;
 
-public class MyAppTask extends AbstractTask {
-
-	public MyAppTask(Properties config) {
-		super(config);
-	}
-
+public class MyAppTask implements Task {
 	@Override
 	public TaskResult run() {
 		System.out.println("Task running");
@@ -23,5 +19,9 @@ public class MyAppTask extends AbstractTask {
 
 	@Override
 	public void cancel() {
+	}
+
+	//@Override
+	public void configure(Properties config) {
 	}
 }

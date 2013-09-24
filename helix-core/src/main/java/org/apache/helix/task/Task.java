@@ -1,5 +1,7 @@
 package org.apache.helix.task;
 
+import java.util.Properties;
+
 
 /**
  * The interface that is to be implemented by a specific task implementation.
@@ -9,6 +11,9 @@ package org.apache.helix.task;
  */
 public interface Task
 {
+
+   //public void configure(Properties config);
+   
   /**
    * Execute the task.
    *
