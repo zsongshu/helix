@@ -429,11 +429,6 @@ public class ZKHelixManager implements HelixManager
   @Override
   public void disconnect()
   {
-    if (!isConnected())
-    {
-      logger.error("ClusterManager " + _instanceName + " already disconnected");
-      return;
-    }
     disconnectInternal();
   }
   
@@ -444,45 +439,51 @@ public class ZKHelixManager implements HelixManager
     logger.info("disconnect " + _instanceName + "(" + _instanceType + ") from "
         + _clusterName);
 
-    /**
-     * shutdown thread pool first to avoid reset() being invoked in the middle of state
-     * transition
-     */
-    _messagingService.getExecutor().shutdown();
-    resetHandlers();
-
-    _helixAccessor.shutdown();
-
-    if (_leaderElectionHandler != null)
+    try 
     {
-      _leaderElectionHandler.reset();
-    }
-
-    if (_participantHealthCheckInfoCollector != null)
-    {
-      _participantHealthCheckInfoCollector.stop();
-    }
-
-    if (_timer != null)
-    {
-      _timer.cancel();
-      _timer = null;
-    }
-
-    if (_instanceType == InstanceType.CONTROLLER)
-    {
-      stopTimerTasks();
-    }
-
-    // unsubscribe accessor from controllerChange
-    _zkClient.unsubscribeAll();
-
-    _zkClient.close();
-
-    // HACK seems that zkClient is not sending DISCONNECT event
-    _zkStateChangeListener.disconnect();
-    logger.info("Cluster manager: " + _instanceName + " disconnected");
+      /**
+       * shutdown thread pool first to avoid reset() being invoked in the middle of state
+       * transition
+       */
+      _messagingService.getExecutor().shutdown();
+      resetHandlers();
   
+      _helixAccessor.shutdown();
+  
+      if (_leaderElectionHandler != null)
+      {
+        _leaderElectionHandler.reset();
+      }
+  
+      if (_participantHealthCheckInfoCollector != null)
+      {
+        _participantHealthCheckInfoCollector.stop();
+      }
+  
+      if (_timer != null)
+      {
+        _timer.cancel();
+        _timer = null;
+      }
+  
+      if (_instanceType == InstanceType.CONTROLLER)
+      {
+        stopTimerTasks();
+      }
+    }
+    catch (Exception e)
+    {
+      logger.error("Exception in disconnecting " + _instanceName + "(" + _instanceType + ") from "
+        + _clusterName, e);
+    }
+    finally
+    {
+      _zkClient.close();
+  
+      // HACK seems that zkClient is not sending DISCONNECT event
+      _zkStateChangeListener.disconnect();
+      logger.info("Cluster manager: " + _instanceName + " disconnected");
+    }
   }
 
   @Override
