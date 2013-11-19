@@ -61,10 +61,9 @@ public class ProviderRebalancer implements Rebalancer {
     }
 
     @Override
-    public ResourceAssignment computeResourceMapping(Resource resource, IdealState idealState, CurrentStateOutput currentStateOutput,
+    public ResourceAssignment computeResourceMapping(String resourceName, IdealState idealState, CurrentStateOutput currentStateOutput,
             ClusterDataCache clusterData) {
 
-        final String resourceName = resource.getResourceName();
         final String containerType = resourceName;
 
         final SortedSet<String> allContainers = Sets.newTreeSet(new IndexedNameComparator());

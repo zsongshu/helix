@@ -13,7 +13,7 @@
   <name>Apache Helix :: Recipes :: Auto-Scale</name>
   
   <properties>
-    <hadoop.version>0.23.9</hadoop.version>
+    <hadoop.version>2.2.0</hadoop.version>
 
     <ut.groups>unit</ut.groups>
     <it.groups>local, shell</it.groups>
