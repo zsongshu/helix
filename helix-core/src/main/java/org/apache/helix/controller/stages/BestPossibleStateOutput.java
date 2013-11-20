@@ -19,51 +19,50 @@ package org.apache.helix.controller.stages;
  * under the License.
  */
 
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
-import org.apache.helix.model.Partition;
+import org.apache.helix.api.id.ResourceId;
+import org.apache.helix.model.ResourceAssignment;
+
+import com.google.common.collect.Maps;
 
 public class BestPossibleStateOutput {
-  // resource->partition->instance->state
-  Map<String, Map<Partition, Map<String, String>>> _dataMap;
+
+  Map<ResourceId, ResourceAssignment> _resourceAssignmentMap;
 
   public BestPossibleStateOutput() {
-    _dataMap = new HashMap<String, Map<Partition, Map<String, String>>>();
+    _resourceAssignmentMap = Maps.newHashMap();
   }
 
-  public void setState(String resourceName, Partition resource,
-      Map<String, String> bestInstanceStateMappingForResource) {
-    if (!_dataMap.containsKey(resourceName)) {
-      _dataMap.put(resourceName, new HashMap<Partition, Map<String, String>>());
-    }
-    Map<Partition, Map<String, String>> map = _dataMap.get(resourceName);
-    map.put(resource, bestInstanceStateMappingForResource);
+  /**
+   * Set the computed resource assignment for a resource
+   * @param resourceId the resource to set
+   * @param resourceAssignment the computed assignment
+   */
+  public void setResourceAssignment(ResourceId resourceId, ResourceAssignment resourceAssignment) {
+    _resourceAssignmentMap.put(resourceId, resourceAssignment);
   }
 
-  public Map<String, String> getInstanceStateMap(String resourceName, Partition resource) {
-    Map<Partition, Map<String, String>> map = _dataMap.get(resourceName);
-    if (map != null) {
-      return map.get(resource);
-    }
-    return Collections.emptyMap();
+  /**
+   * Get the resource assignment computed for a resource
+   * @param resourceId resource to look up
+   * @return ResourceAssignment computed by the best possible state calculation
+   */
+  public ResourceAssignment getResourceAssignment(ResourceId resourceId) {
+    return _resourceAssignmentMap.get(resourceId);
   }
 
-  public Map<Partition, Map<String, String>> getResourceMap(String resourceName) {
-    Map<Partition, Map<String, String>> map = _dataMap.get(resourceName);
-    if (map != null) {
-      return map;
-    }
-    return Collections.emptyMap();
-  }
-
-  public Map<String, Map<Partition, Map<String, String>>> getStateMap() {
-    return _dataMap;
+  /**
+   * Get all of the resources currently assigned
+   * @return set of assigned resource ids
+   */
+  public Set<ResourceId> getAssignedResources() {
+    return _resourceAssignmentMap.keySet();
   }
 
   @Override
   public String toString() {
-    return _dataMap.toString();
+    return _resourceAssignmentMap.toString();
   }
 }

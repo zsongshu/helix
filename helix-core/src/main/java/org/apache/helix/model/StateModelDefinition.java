@@ -30,8 +30,12 @@ import java.util.TreeMap;
 import org.apache.helix.HelixDefinedState;
 import org.apache.helix.HelixProperty;
 import org.apache.helix.ZNRecord;
+import org.apache.helix.api.State;
+import org.apache.helix.api.id.StateModelDefId;
 import org.apache.helix.model.builder.StateTransitionTableBuilder;
-import org.apache.log4j.Logger;
+import org.apache.helix.model.util.StateModelDefinitionValidator;
+
+import com.google.common.collect.ImmutableList;
 
 /**
  * Describe the state model
@@ -43,7 +47,6 @@ public class StateModelDefinition extends HelixProperty {
     STATE_PRIORITY_LIST
   }
 
-  private static final Logger _logger = Logger.getLogger(StateModelDefinition.class.getName());
   /**
    * state model's initial state
    */
@@ -138,6 +141,14 @@ public class StateModelDefinition extends HelixProperty {
   }
 
   /**
+   * Get a concrete state model definition id
+   * @return StateModelDefId
+   */
+  public StateModelDefId getStateModelDefId() {
+    return StateModelDefId.from(getId());
+  }
+
+  /**
    * Get an ordered priority list of transitions
    * @return transitions in the form SRC-DEST, the first of which is highest priority
    */
@@ -146,11 +157,37 @@ public class StateModelDefinition extends HelixProperty {
   }
 
   /**
+   * Get an ordered priority list of transitions
+   * @return Transition objects, the first of which is highest priority (immutable)
+   */
+  public List<Transition> getTypedStateTransitionPriorityList() {
+    ImmutableList.Builder<Transition> builder = new ImmutableList.Builder<Transition>();
+    for (String transition : getStateTransitionPriorityList()) {
+      String fromState = transition.substring(0, transition.indexOf('-'));
+      String toState = transition.substring(transition.indexOf('-') + 1);
+      builder.add(Transition.from(State.from(fromState), State.from(toState)));
+    }
+    return builder.build();
+  }
+
+  /**
    * Get an ordered priority list of states
    * @return state names, the first of which is highest priority
    */
   public List<String> getStatesPriorityList() {
     return _statesPriorityList;
+  }
+
+  /**
+   * Get an ordered priority list of states
+   * @return immutable list of states, the first of which is highest priority (immutable)
+   */
+  public List<State> getTypedStatesPriorityList() {
+    ImmutableList.Builder<State> builder = new ImmutableList.Builder<State>();
+    for (String state : getStatesPriorityList()) {
+      builder.add(State.from(state));
+    }
+    return builder.build();
   }
 
   /**
@@ -168,6 +205,20 @@ public class StateModelDefinition extends HelixProperty {
   }
 
   /**
+   * Get the intermediate state required to transition from one state to the other
+   * @param fromState the source
+   * @param toState the destination
+   * @return the intermediate state, or null if not present
+   */
+  public State getNextStateForTransition(State fromState, State toState) {
+    String next = getNextStateForTransition(fromState.toString(), toState.toString());
+    if (next != null) {
+      return State.from(getNextStateForTransition(fromState.toString(), toState.toString()));
+    }
+    return null;
+  }
+
+  /**
    * Get the starting state in the model
    * @return name of the initial state
    */
@@ -175,6 +226,16 @@ public class StateModelDefinition extends HelixProperty {
     // return _record.getSimpleField(StateModelDefinitionProperty.INITIAL_STATE
     // .toString());
     return _initialState;
+  }
+
+  /**
+   * Get the starting state in the model
+   * @return name of the initial state
+   */
+  public State getTypedInitialState() {
+    // return _record.getSimpleField(StateModelDefinitionProperty.INITIAL_STATE
+    // .toString());
+    return State.from(_initialState);
   }
 
   /**
@@ -186,18 +247,18 @@ public class StateModelDefinition extends HelixProperty {
     return _statesCountMap.get(state);
   }
 
+  /**
+   * Number of participants that can be in each state
+   * @param state the state
+   * @return maximum instance count per state, can be "N" or "R"
+   */
+  public String getNumParticipantsPerState(State state) {
+    return _statesCountMap.get(state.toString());
+  }
+
   @Override
   public boolean isValid() {
-    if (getInitialState() == null) {
-      _logger.error("State model does not contain init state, statemodel:" + _record.getId());
-      return false;
-    }
-    if (_record.getListField(StateModelDefinitionProperty.STATE_PRIORITY_LIST.toString()) == null) {
-      _logger.error("CurrentState does not contain StatesPriorityList, state model : "
-          + _record.getId());
-      return false;
-    }
-    return true;
+    return StateModelDefinitionValidator.isStateModelDefinitionValid(this);
   }
 
   // TODO move this to model.builder package, refactor StateModelConfigGenerator to use this
@@ -212,20 +273,37 @@ public class StateModelDefinition extends HelixProperty {
     Map<String, String> stateConstraintMap;
 
     /**
-     * Start building a state model with a name
-     * @param name state model name
+     * Start building a state model with a id
+     * @param stateModelDefId state model id
      */
-    public Builder(String name) {
-      this._statemodelName = name;
+    public Builder(StateModelDefId stateModelDefId) {
+      this._statemodelName = stateModelDefId.stringify();
       statesMap = new HashMap<String, Integer>();
       transitionMap = new HashMap<Transition, Integer>();
       stateConstraintMap = new HashMap<String, String>();
     }
 
     /**
+     * Start building a state model with a name
+     * @param stateModelDefId state model name
+     */
+    public Builder(String stateModelName) {
+      this(StateModelDefId.from(stateModelName));
+    }
+
+    /**
      * initial state of a replica when it starts, most commonly used initial
      * state is OFFLINE
-     * @param state
+     * @param initialState
+     */
+    public Builder initialState(State initialState) {
+      return initialState(initialState.toString());
+    }
+
+    /**
+     * initial state of a replica when it starts, most commonly used initial
+     * state is OFFLINE
+     * @param initialState
      */
     public Builder initialState(String initialState) {
       this.initialState = initialState;
@@ -238,7 +316,21 @@ public class StateModelDefinition extends HelixProperty {
      * STATE2 has a constraint of 3 but only one node is up then Helix will uses
      * the priority to see STATE constraint has to be given higher preference <br/>
      * Use -1 to indicates states with no constraints, like OFFLINE
-     * @param states
+     * @param state the state to add
+     * @param priority the state priority, lower number is higher priority
+     */
+    public Builder addState(State state, int priority) {
+      return addState(state.toString(), priority);
+    }
+
+    /**
+     * Define all valid states using this method. Set the priority in which the
+     * constraints must be satisfied. Lets say STATE1 has a constraint of 1 and
+     * STATE2 has a constraint of 3 but only one node is up then Helix will uses
+     * the priority to see STATE constraint has to be given higher preference <br/>
+     * Use -1 to indicates states with no constraints, like OFFLINE
+     * @param state the state to add
+     * @param priority the state priority, lower number is higher priority
      */
     public Builder addState(String state, int priority) {
       statesMap.put(state, priority);
@@ -249,8 +341,34 @@ public class StateModelDefinition extends HelixProperty {
      * Sets the priority to Integer.MAX_VALUE
      * @param state
      */
+    public Builder addState(State state) {
+      addState(state, Integer.MAX_VALUE);
+      return this;
+    }
+
+    /**
+     * Sets the priority to Integer.MAX_VALUE
+     * @param state
+     */
     public Builder addState(String state) {
       addState(state, Integer.MAX_VALUE);
+      return this;
+    }
+
+    /**
+     * Define all legal transitions between states using this method. Priority
+     * is used to order the transitions. Helix tries to maximize the number of
+     * transitions that can be fired in parallel without violating the
+     * constraint. The transitions are first sorted based on priority and
+     * transitions are selected in a greedy way until the constriants are not
+     * violated.
+     * @param fromState source
+     * @param toState destination
+     * @param priority priority, higher value is higher priority
+     * @return Builder
+     */
+    public Builder addTransition(State fromState, State toState, int priority) {
+      transitionMap.put(new Transition(fromState, toState), priority);
       return this;
     }
 
@@ -278,9 +396,31 @@ public class StateModelDefinition extends HelixProperty {
      * @param toState
      * @return Builder
      */
+    public Builder addTransition(State fromState, State toState) {
+      addTransition(fromState, toState, Integer.MAX_VALUE);
+      return this;
+    }
+
+    /**
+     * Add a state transition with maximal priority value
+     * @see #addTransition(String, String, int)
+     * @param fromState
+     * @param toState
+     * @return Builder
+     */
     public Builder addTransition(String fromState, String toState) {
       addTransition(fromState, toState, Integer.MAX_VALUE);
       return this;
+    }
+
+    /**
+     * Set a maximum for replicas in this state
+     * @param state state name
+     * @param upperBound maximum
+     * @return Builder
+     */
+    public Builder upperBound(State state, int upperBound) {
+      return upperBound(state.toString(), upperBound);
     }
 
     /**
@@ -308,6 +448,24 @@ public class StateModelDefinition extends HelixProperty {
      * @param bound
      * @return Builder
      */
+    public Builder dynamicUpperBound(State state, String bound) {
+      return dynamicUpperBound(state.toString(), bound);
+    }
+
+    /**
+     * You can use this to have the bounds dynamically change based on other
+     * parameters. <br/>
+     * Currently support 2 values <br/>
+     * R --> Refers to the number of replicas specified during resource
+     * creation. This allows having different replication factor for each
+     * resource without having to create a different state machine. <br/>
+     * N --> Refers to all nodes in the cluster. Useful for resources that need
+     * to exist on all nodes. This way one can add/remove nodes without having
+     * the change the bounds.
+     * @param state
+     * @param bound
+     * @return Builder
+     */
     public Builder dynamicUpperBound(String state, String bound) {
       stateConstraintMap.put(state, bound);
       return this;
@@ -319,6 +477,8 @@ public class StateModelDefinition extends HelixProperty {
      */
     public StateModelDefinition build() {
       ZNRecord record = new ZNRecord(_statemodelName);
+
+      // get sorted state priorities by specified values
       ArrayList<String> statePriorityList = new ArrayList<String>(statesMap.keySet());
       Comparator<? super String> c1 = new Comparator<String>() {
 
@@ -328,8 +488,9 @@ public class StateModelDefinition extends HelixProperty {
         }
       };
       Collections.sort(statePriorityList, c1);
-      ArrayList<Transition> transitionList = new ArrayList<Transition>(transitionMap.keySet());
 
+      // get sorted transition priorities by specified values
+      ArrayList<Transition> transitionList = new ArrayList<Transition>(transitionMap.keySet());
       Comparator<? super Transition> c2 = new Comparator<Transition>() {
         @Override
         public int compare(Transition o1, Transition o2) {
@@ -347,6 +508,8 @@ public class StateModelDefinition extends HelixProperty {
           statePriorityList);
       record.setListField(StateModelDefinitionProperty.STATE_TRANSITION_PRIORITYLIST.toString(),
           transitionPriorityList);
+
+      // compute full paths for next states
       StateTransitionTableBuilder stateTransitionTableBuilder = new StateTransitionTableBuilder();
       Map<String, Map<String, String>> transitionTable =
           stateTransitionTableBuilder.buildTransitionTable(statePriorityList,
@@ -354,6 +517,8 @@ public class StateModelDefinition extends HelixProperty {
       for (String state : transitionTable.keySet()) {
         record.setMapField(state + ".next", transitionTable.get(state));
       }
+
+      // state counts
       for (String state : statePriorityList) {
         HashMap<String, String> metadata = new HashMap<String, String>();
         if (stateConstraintMap.get(state) != null) {

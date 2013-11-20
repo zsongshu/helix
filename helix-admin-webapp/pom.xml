@@ -21,7 +21,7 @@ under the License.
   <parent>
     <groupId>org.apache.helix</groupId>
     <artifactId>helix</artifactId>
-    <version>0.6.2-incubating-SNAPSHOT</version>
+    <version>0.7.1-incubating-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
@@ -47,13 +47,8 @@ under the License.
       <artifactId>helix-core</artifactId>
     </dependency>
     <dependency>
-      <groupId>com.noelios.restlet</groupId>
-      <artifactId>com.noelios.restlet</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>com.thoughtworks.xstream</groupId>
-      <artifactId>xstream</artifactId>
-      <version>1.3.1</version>
+      <groupId>org.restlet.jse</groupId>
+      <artifactId>org.restlet</artifactId>
     </dependency>
     <dependency>
       <groupId>org.codehaus.jackson</groupId>

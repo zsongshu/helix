@@ -24,6 +24,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.apache.helix.HelixManager;
+import org.apache.helix.InstanceType;
 import org.apache.helix.NotificationContext;
 import org.apache.helix.PropertyKey;
 import org.apache.helix.PropertyPathConfig;
@@ -31,10 +33,10 @@ import org.apache.helix.PropertyType;
 import org.apache.helix.TestHelper;
 import org.apache.helix.ZNRecord;
 import org.apache.helix.ZkTestHelper;
+import org.apache.helix.api.id.PartitionId;
 import org.apache.helix.integration.ZkIntegrationTestBase;
-import org.apache.helix.manager.zk.ControllerManager;
-import org.apache.helix.manager.zk.ParticipantManager;
 import org.apache.helix.manager.zk.ZKHelixDataAccessor;
+import org.apache.helix.manager.zk.ZKHelixManager;
 import org.apache.helix.manager.zk.ZNRecordSerializer;
 import org.apache.helix.manager.zk.ZkBaseDataAccessor;
 import org.apache.helix.mock.participant.MockMSModelFactory;
@@ -42,7 +44,6 @@ import org.apache.helix.mock.participant.MockTransition;
 import org.apache.helix.model.Message;
 import org.apache.helix.tools.ClusterStateVerifier;
 import org.apache.helix.tools.ClusterStateVerifier.BestPossAndExtViewZkVerifier;
-import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.testng.Assert;
 import org.testng.annotations.Test;
@@ -70,13 +71,14 @@ public class TestParticipantManager extends ZkIntegrationTestBase {
         1, // replicas
         "MasterSlave", true); // do rebalance
 
-    ParticipantManager participant =
-        new ParticipantManager(ZK_ADDR, clusterName, "localhost_12918");
+    HelixManager participant =
+        new ZKHelixManager(clusterName, "localhost_12918", InstanceType.PARTICIPANT, ZK_ADDR);
     participant.getStateMachineEngine().registerStateModelFactory("MasterSlave",
         new MockMSModelFactory());
     participant.connect();
 
-    ControllerManager controller = new ControllerManager(ZK_ADDR, clusterName, "controller_0");
+    HelixManager controller =
+        new ZKHelixManager(clusterName, "controller_0", InstanceType.CONTROLLER, ZK_ADDR);
     controller.connect();
 
     boolean result =
@@ -121,8 +123,9 @@ public class TestParticipantManager extends ZkIntegrationTestBase {
         "MasterSlave", true); // do rebalance
 
     // start controller
-    ControllerManager controller = new ControllerManager(ZK_ADDR, clusterName, "controller_0");
-    controller.connect();
+    ClusterControllerManager controller =
+        new ClusterControllerManager(ZK_ADDR, clusterName, "controller_0");
+    controller.syncStart();
 
     // start participants
     for (int i = 0; i < n; i++) {
@@ -151,7 +154,7 @@ public class TestParticipantManager extends ZkIntegrationTestBase {
     Assert.assertNotSame(newSessionId, oldSessionId);
 
     // cleanup
-    controller.disconnect();
+    controller.syncStop();
     for (int i = 0; i < n; i++) {
       participants[i].syncStop();
     }
@@ -174,7 +177,7 @@ public class TestParticipantManager extends ZkIntegrationTestBase {
     public void doTransition(Message message, NotificationContext context)
         throws InterruptedException {
       String instance = message.getTgtName();
-      String partition = message.getPartitionName();
+      PartitionId partition = message.getPartitionId();
       if (instance.equals("localhost_12918") && partition.equals("TestDB0_0")
           && _done.getAndSet(true) == false) {
         _startCountdown.countDown();
@@ -207,8 +210,9 @@ public class TestParticipantManager extends ZkIntegrationTestBase {
         "MasterSlave", true); // do rebalance
 
     // start controller
-    ControllerManager controller = new ControllerManager(ZK_ADDR, clusterName, "controller_0");
-    controller.connect();
+    ClusterControllerManager controller =
+        new ClusterControllerManager(ZK_ADDR, clusterName, "controller_0");
+    controller.syncStart();
 
     // start participants
     for (int i = 0; i < n; i++) {
@@ -245,7 +249,7 @@ public class TestParticipantManager extends ZkIntegrationTestBase {
     Assert.assertTrue(errString.indexOf("InterruptedException") != -1);
 
     // cleanup
-    controller.disconnect();
+    controller.syncStop();
     for (int i = 0; i < n; i++) {
       participants[i].syncStop();
     }

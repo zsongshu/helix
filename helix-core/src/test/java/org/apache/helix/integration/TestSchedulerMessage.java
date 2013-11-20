@@ -22,6 +22,7 @@ package org.apache.helix.integration;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -38,6 +39,7 @@ import org.apache.helix.InstanceType;
 import org.apache.helix.NotificationContext;
 import org.apache.helix.PropertyKey;
 import org.apache.helix.PropertyType;
+import org.apache.helix.TestHelper;
 import org.apache.helix.ZNRecord;
 import org.apache.helix.PropertyKey.Builder;
 import org.apache.helix.manager.zk.DefaultSchedulerMessageHandlerFactory;
@@ -82,7 +84,7 @@ public class TestSchedulerMessage extends ZkStandAloneCMTestBaseWithPropertyServ
     }
   }
 
-  TestMessagingHandlerFactory _factory = new TestMessagingHandlerFactory();
+  final TestMessagingHandlerFactory _factory = new TestMessagingHandlerFactory();
 
   public static class TestMessagingHandlerFactory implements MessageHandlerFactory {
     public Map<String, Set<String>> _results = new ConcurrentHashMap<String, Set<String>>();
@@ -114,14 +116,16 @@ public class TestSchedulerMessage extends ZkStandAloneCMTestBaseWithPropertyServ
         HelixTaskResult result = new HelixTaskResult();
         result.setSuccess(true);
         String destName = _message.getTgtName();
+        String partitionName = _message.getPartitionName();
         result.getTaskResultMap().put("Message", _message.getMsgId());
         synchronized (_results) {
-          if (!_results.containsKey(_message.getPartitionName())) {
-            _results.put(_message.getPartitionName(), new ConcurrentSkipListSet<String>());
+          if (!_results.containsKey(partitionName)) {
+            _results.put(partitionName, new HashSet<String>());
           }
+          _results.get(partitionName).add(_message.getMsgId());
         }
-        _results.get(_message.getPartitionName()).add(_message.getMsgId());
-        // System.err.println("Message " + _message.getMsgId() + " executed");
+        // System.err.println("handle msg: " + _message.getPartitionName() + ", from: "
+        // + _message.getFromState() + ", to: " + _message.getToState());
         return result;
       }
 
@@ -189,15 +193,15 @@ public class TestSchedulerMessage extends ZkStandAloneCMTestBaseWithPropertyServ
   }
 
   @Test()
-  public void TestSchedulerMsgUsingQueue() throws Exception {
+  public void testSchedulerMsgUsingQueue() throws Exception {
     Logger.getRootLogger().setLevel(Level.INFO);
     _factory._results.clear();
     HelixManager manager = null;
     for (int i = 0; i < NODE_NR; i++) {
-      String hostDest = "localhost_" + (START_PORT + i);
-      _startCMResultMap.get(hostDest)._manager.getMessagingService().registerMessageHandlerFactory(
+      _participants[i].getMessagingService().registerMessageHandlerFactory(
           _factory.getMessageType(), _factory);
-      manager = _startCMResultMap.get(hostDest)._manager;
+
+      manager = _participants[i]; // _startCMResultMap.get(hostDest)._manager;
     }
 
     Message schedulerMessage =
@@ -277,15 +281,15 @@ public class TestSchedulerMessage extends ZkStandAloneCMTestBaseWithPropertyServ
   }
 
   @Test()
-  public void TestSchedulerMsg() throws Exception {
+  public void testSchedulerMsg() throws Exception {
     Logger.getRootLogger().setLevel(Level.INFO);
     _factory._results.clear();
     HelixManager manager = null;
     for (int i = 0; i < NODE_NR; i++) {
-      String hostDest = "localhost_" + (START_PORT + i);
-      _startCMResultMap.get(hostDest)._manager.getMessagingService().registerMessageHandlerFactory(
+      _participants[i].getMessagingService().registerMessageHandlerFactory(
           _factory.getMessageType(), _factory);
-      manager = _startCMResultMap.get(hostDest)._manager;
+
+      manager = _participants[i]; // _startCMResultMap.get(hostDest)._manager;
     }
 
     Message schedulerMessage =
@@ -367,11 +371,11 @@ public class TestSchedulerMessage extends ZkStandAloneCMTestBaseWithPropertyServ
     String controllerStatusPath =
         HelixUtil.getControllerPropertyPath(manager.getClusterName(),
             PropertyType.STATUSUPDATES_CONTROLLER);
-    List<String> subPaths = _zkClient.getChildren(controllerStatusPath);
+    List<String> subPaths = _gZkClient.getChildren(controllerStatusPath);
     Assert.assertTrue(subPaths.size() > 0);
     for (String subPath : subPaths) {
       String nextPath = controllerStatusPath + "/" + subPath;
-      List<String> subsubPaths = _zkClient.getChildren(nextPath);
+      List<String> subsubPaths = _gZkClient.getChildren(nextPath);
       Assert.assertTrue(subsubPaths.size() > 0);
     }
 
@@ -379,51 +383,51 @@ public class TestSchedulerMessage extends ZkStandAloneCMTestBaseWithPropertyServ
         HelixUtil.getInstancePropertyPath(manager.getClusterName(), "localhost_" + (START_PORT),
             PropertyType.STATUSUPDATES);
 
-    subPaths = _zkClient.getChildren(instanceStatusPath);
+    subPaths = _gZkClient.getChildren(instanceStatusPath);
     Assert.assertTrue(subPaths.size() > 0);
     for (String subPath : subPaths) {
       String nextPath = instanceStatusPath + "/" + subPath;
-      List<String> subsubPaths = _zkClient.getChildren(nextPath);
+      List<String> subsubPaths = _gZkClient.getChildren(nextPath);
       Assert.assertTrue(subsubPaths.size() > 0);
       for (String subsubPath : subsubPaths) {
         String nextnextPath = nextPath + "/" + subsubPath;
-        Assert.assertTrue(_zkClient.getChildren(nextnextPath).size() > 0);
+        Assert.assertTrue(_gZkClient.getChildren(nextnextPath).size() > 0);
       }
     }
     Thread.sleep(3000);
-    ZKPathDataDumpTask dumpTask = new ZKPathDataDumpTask(manager, _zkClient, 0);
+    ZKPathDataDumpTask dumpTask = new ZKPathDataDumpTask(manager, _gZkClient, 0);
     dumpTask.run();
 
-    subPaths = _zkClient.getChildren(controllerStatusPath);
+    subPaths = _gZkClient.getChildren(controllerStatusPath);
     Assert.assertTrue(subPaths.size() > 0);
     for (String subPath : subPaths) {
       String nextPath = controllerStatusPath + "/" + subPath;
-      List<String> subsubPaths = _zkClient.getChildren(nextPath);
+      List<String> subsubPaths = _gZkClient.getChildren(nextPath);
       Assert.assertTrue(subsubPaths.size() == 0);
     }
 
-    subPaths = _zkClient.getChildren(instanceStatusPath);
+    subPaths = _gZkClient.getChildren(instanceStatusPath);
     Assert.assertTrue(subPaths.size() > 0);
     for (String subPath : subPaths) {
       String nextPath = instanceStatusPath + "/" + subPath;
-      List<String> subsubPaths = _zkClient.getChildren(nextPath);
+      List<String> subsubPaths = _gZkClient.getChildren(nextPath);
       Assert.assertTrue(subsubPaths.size() > 0);
       for (String subsubPath : subsubPaths) {
         String nextnextPath = nextPath + "/" + subsubPath;
-        Assert.assertTrue(_zkClient.getChildren(nextnextPath).size() == 0);
+        Assert.assertTrue(_gZkClient.getChildren(nextnextPath).size() == 0);
       }
     }
   }
 
   @Test()
-  public void TestSchedulerMsg2() throws Exception {
+  public void testSchedulerMsg2() throws Exception {
     _factory._results.clear();
     HelixManager manager = null;
     for (int i = 0; i < NODE_NR; i++) {
-      String hostDest = "localhost_" + (START_PORT + i);
-      _startCMResultMap.get(hostDest)._manager.getMessagingService().registerMessageHandlerFactory(
+      _participants[i].getMessagingService().registerMessageHandlerFactory(
           _factory.getMessageType(), _factory);
-      manager = _startCMResultMap.get(hostDest)._manager;
+
+      manager = _participants[i]; // _startCMResultMap.get(hostDest)._manager;
     }
 
     Message schedulerMessage =
@@ -507,14 +511,14 @@ public class TestSchedulerMessage extends ZkStandAloneCMTestBaseWithPropertyServ
   }
 
   @Test()
-  public void TestSchedulerZeroMsg() throws Exception {
+  public void testSchedulerZeroMsg() throws Exception {
     TestMessagingHandlerFactory factory = new TestMessagingHandlerFactory();
     HelixManager manager = null;
     for (int i = 0; i < NODE_NR; i++) {
-      String hostDest = "localhost_" + (START_PORT + i);
-      _startCMResultMap.get(hostDest)._manager.getMessagingService().registerMessageHandlerFactory(
+      _participants[i].getMessagingService().registerMessageHandlerFactory(
           factory.getMessageType(), factory);
-      manager = _startCMResultMap.get(hostDest)._manager;
+
+      manager = _participants[i]; // _startCMResultMap.get(hostDest)._manager;
     }
 
     Message schedulerMessage =
@@ -577,17 +581,17 @@ public class TestSchedulerMessage extends ZkStandAloneCMTestBaseWithPropertyServ
   }
 
   @Test()
-  public void TestSchedulerMsg3() throws Exception {
+  public void testSchedulerMsg3() throws Exception {
     _factory._results.clear();
     HelixManager manager = null;
     for (int i = 0; i < NODE_NR; i++) {
-      String hostDest = "localhost_" + (START_PORT + i);
-      _startCMResultMap.get(hostDest)._manager.getMessagingService().registerMessageHandlerFactory(
+      _participants[i].getMessagingService().registerMessageHandlerFactory(
           _factory.getMessageType(), _factory);
-      //
-      _startCMResultMap.get(hostDest)._manager.getMessagingService().registerMessageHandlerFactory(
-          _factory.getMessageType(), _factory);
-      manager = _startCMResultMap.get(hostDest)._manager;
+
+      // _participants[i].getMessagingService().registerMessageHandlerFactory(
+      // _factory.getMessageType(), _factory);
+
+      manager = _participants[i]; // _startCMResultMap.get(hostDest)._manager;
     }
 
     Message schedulerMessage =
@@ -686,29 +690,47 @@ public class TestSchedulerMessage extends ZkStandAloneCMTestBaseWithPropertyServ
       }
       Assert.assertEquals(messageResultCount, _PARTITIONS * 3 / 5);
 
-      int count = 0;
-      // System.out.println(i);
-      for (Set<String> val : _factory._results.values()) {
-        // System.out.println(val);
-        count += val.size();
+
+      boolean success = false;
+      for (int j = 0; j < 6; j++) {
+        int count = 0;
+        // System.out.println(i);
+        for (Set<String> val : _factory._results.values()) {
+          // System.out.println(val);
+          count += val.size();
+        }
+        // System.out.println(count);
+        // Assert.assertEquals(count, _PARTITIONS * 3 / 5 * (i + 1));
+        success = count == _PARTITIONS * 3 / 5 * (i + 1);
+        if (success) {
+          break;
+        }
+        Thread.sleep(500);
       }
-      // System.out.println(count);
-      Assert.assertEquals(count, _PARTITIONS * 3 / 5 * (i + 1));
+      Assert.assertTrue(success);
     }
   }
 
+  private int count(TestMessagingHandlerFactory factory) {
+    int cnt = 0;
+    for (Set<String> val : factory._results.values()) {
+      cnt += val.size();
+    }
+    return cnt;
+  }
+
   @Test()
-  public void TestSchedulerMsg4() throws Exception {
+  public void testSchedulerMsg4() throws Exception {
     _factory._results.clear();
     HelixManager manager = null;
     for (int i = 0; i < NODE_NR; i++) {
-      String hostDest = "localhost_" + (START_PORT + i);
-      _startCMResultMap.get(hostDest)._manager.getMessagingService().registerMessageHandlerFactory(
+      _participants[i].getMessagingService().registerMessageHandlerFactory(
           _factory.getMessageType(), _factory);
-      //
-      _startCMResultMap.get(hostDest)._manager.getMessagingService().registerMessageHandlerFactory(
-          _factory.getMessageType(), _factory);
-      manager = _startCMResultMap.get(hostDest)._manager;
+
+      // _participants[i].getMessagingService().registerMessageHandlerFactory(
+      // _factory.getMessageType(), _factory);
+
+      manager = _participants[i]; // _startCMResultMap.get(hostDest)._manager;
     }
 
     Message schedulerMessage =
@@ -719,9 +741,9 @@ public class TestSchedulerMessage extends ZkStandAloneCMTestBaseWithPropertyServ
     schedulerMessage.setSrcName("CONTROLLER");
 
     // Template for the individual message sent to each participant
-    Message msg = new Message(_factory.getMessageType(), "Template");
-    msg.setTgtSessionId("*");
-    msg.setMsgState(MessageState.NEW);
+    Message msgTemplate = new Message(_factory.getMessageType(), "Template");
+    msgTemplate.setTgtSessionId("*");
+    msgTemplate.setMsgState(MessageState.NEW);
 
     // Criteria to send individual messages
     Criteria cr = new Criteria();
@@ -741,7 +763,7 @@ public class TestSchedulerMessage extends ZkStandAloneCMTestBaseWithPropertyServ
     String crString = sw.toString();
 
     schedulerMessage.getRecord().setSimpleField("Criteria", crString);
-    schedulerMessage.getRecord().setMapField("MessageTemplate", msg.getRecord().getSimpleFields());
+    schedulerMessage.getRecord().setMapField("MessageTemplate", msgTemplate.getRecord().getSimpleFields());
     schedulerMessage.getRecord().setSimpleField("TIMEOUT", "-1");
     schedulerMessage.getRecord().setSimpleField("WAIT_ALL", "true");
 
@@ -776,6 +798,15 @@ public class TestSchedulerMessage extends ZkStandAloneCMTestBaseWithPropertyServ
         callback._message.getResultMap()
             .get(DefaultSchedulerMessageHandlerFactory.SCHEDULER_MSG_ID);
 
+    boolean success = TestHelper.verify(new TestHelper.Verifier() {
+
+      @Override
+      public boolean verify() throws Exception {
+        return count(_factory) == 60; // TestDB number_of_partitions x replicas
+      }
+    }, 10 * 1000);
+    Assert.assertTrue(success, "If not specifying participant, controller will send 60 messages");
+
     HelixDataAccessor helixDataAccessor = manager.getHelixDataAccessor();
     Builder keyBuilder = helixDataAccessor.keyBuilder();
     ArrayList<String> msgIds = new ArrayList<String>();
@@ -792,11 +823,18 @@ public class TestSchedulerMessage extends ZkStandAloneCMTestBaseWithPropertyServ
       crString = sw.toString();
       schedulerMessage.getRecord().setSimpleField("Criteria", crString);
       manager.getMessagingService().sendAndWait(cr2, schedulerMessage, callback, -1);
+
+      Thread.sleep(5000);
+      System.err.println("count: " + count(_factory));
+
       String msgId =
           callback._message.getResultMap().get(
               DefaultSchedulerMessageHandlerFactory.SCHEDULER_MSG_ID);
       msgIds.add(msgId);
     }
+
+    // System.err.println("count: " + count(_factory));
+
     for (int i = 0; i < NODE_NR; i++) {
       String msgId = msgIds.get(i);
       for (int j = 0; j < 100; j++) {
@@ -837,6 +875,8 @@ public class TestSchedulerMessage extends ZkStandAloneCMTestBaseWithPropertyServ
         break;
       }
     }
+
+    // Thread.sleep(5000);
     int count = 0;
     for (Set<String> val : _factory._results.values()) {
       // System.out.println(val);
@@ -847,18 +887,18 @@ public class TestSchedulerMessage extends ZkStandAloneCMTestBaseWithPropertyServ
   }
 
   @Test
-  public void TestSchedulerMsgContraints() throws JsonGenerationException, JsonMappingException,
+  public void testSchedulerMsgContraints() throws JsonGenerationException, JsonMappingException,
       IOException, InterruptedException {
     TestMessagingHandlerFactoryLatch factory = new TestMessagingHandlerFactoryLatch();
     HelixManager manager = null;
     for (int i = 0; i < NODE_NR; i++) {
-      String hostDest = "localhost_" + (START_PORT + i);
-      _startCMResultMap.get(hostDest)._manager.getMessagingService().registerMessageHandlerFactory(
+      _participants[i].getMessagingService().registerMessageHandlerFactory(
           factory.getMessageType(), factory);
-      //
-      _startCMResultMap.get(hostDest)._manager.getMessagingService().registerMessageHandlerFactory(
+
+      _participants[i].getMessagingService().registerMessageHandlerFactory(
           factory.getMessageType(), factory);
-      manager = _startCMResultMap.get(hostDest)._manager;
+
+      manager = _participants[i]; // _startCMResultMap.get(hostDest)._manager;
     }
 
     Message schedulerMessage =

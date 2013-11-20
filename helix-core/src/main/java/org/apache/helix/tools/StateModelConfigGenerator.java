@@ -24,6 +24,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.helix.ZNRecord;
+import org.apache.helix.api.State;
 import org.apache.helix.manager.zk.DefaultSchedulerMessageHandlerFactory;
 import org.apache.helix.manager.zk.ZNRecordSerializer;
 import org.apache.helix.model.StateModelDefinition.StateModelDefinitionProperty;
@@ -38,8 +39,8 @@ public class StateModelConfigGenerator {
 
   public static void main(String[] args) {
     ZNRecordSerializer serializer = new ZNRecordSerializer();
-    StateModelConfigGenerator generator = new StateModelConfigGenerator();
-    System.out.println(new String(serializer.serialize(generator.generateConfigForMasterSlave())));
+    System.out.println(new String(serializer.serialize(StateModelConfigGenerator
+        .generateConfigForMasterSlave())));
   }
 
   /**
@@ -330,9 +331,9 @@ public class StateModelConfigGenerator {
     states.add("OFFLINE");
 
     List<Transition> transitions = new ArrayList<Transition>();
-    transitions.add(new Transition("OFFLINE", "COMPLETED"));
-    transitions.add(new Transition("OFFLINE", "DROPPED"));
-    transitions.add(new Transition("COMPLETED", "DROPPED"));
+    transitions.add(Transition.from(State.from("OFFLINE"), State.from("COMPLETED")));
+    transitions.add(Transition.from(State.from("OFFLINE"), State.from("DROPPED")));
+    transitions.add(Transition.from(State.from("COMPLETED"), State.from("DROPPED")));
 
     StateTransitionTableBuilder builder = new StateTransitionTableBuilder();
     Map<String, Map<String, String>> next = builder.buildTransitionTable(states, transitions);

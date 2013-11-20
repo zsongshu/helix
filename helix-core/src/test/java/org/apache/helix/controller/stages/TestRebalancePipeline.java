@@ -25,36 +25,39 @@ import java.util.List;
 import org.apache.helix.HelixAdmin;
 import org.apache.helix.HelixDataAccessor;
 import org.apache.helix.HelixManager;
+import org.apache.helix.PropertyKey.Builder;
 import org.apache.helix.TestHelper;
 import org.apache.helix.ZNRecord;
 import org.apache.helix.ZkUnitTestBase;
-import org.apache.helix.PropertyKey.Builder;
+import org.apache.helix.api.State;
+import org.apache.helix.api.accessor.ClusterAccessor;
+import org.apache.helix.api.id.ClusterId;
+import org.apache.helix.api.id.PartitionId;
+import org.apache.helix.api.id.ResourceId;
+import org.apache.helix.api.id.SessionId;
 import org.apache.helix.controller.HelixControllerMain;
 import org.apache.helix.controller.pipeline.Pipeline;
 import org.apache.helix.controller.stages.AttributeName;
 import org.apache.helix.controller.stages.BestPossibleStateCalcStage;
 import org.apache.helix.controller.stages.ClusterEvent;
 import org.apache.helix.controller.stages.CurrentStateComputationStage;
-import org.apache.helix.controller.stages.MessageGenerationPhase;
 import org.apache.helix.controller.stages.MessageSelectionStage;
-import org.apache.helix.controller.stages.MessageSelectionStageOutput;
 import org.apache.helix.controller.stages.MessageThrottleStage;
 import org.apache.helix.controller.stages.ReadClusterDataStage;
 import org.apache.helix.controller.stages.ResourceComputationStage;
 import org.apache.helix.controller.stages.TaskAssignmentStage;
+import org.apache.helix.integration.manager.ClusterControllerManager;
 import org.apache.helix.manager.zk.ZKHelixAdmin;
 import org.apache.helix.manager.zk.ZKHelixDataAccessor;
 import org.apache.helix.manager.zk.ZkBaseDataAccessor;
 import org.apache.helix.model.CurrentState;
+import org.apache.helix.model.InstanceConfig;
 import org.apache.helix.model.Message;
-import org.apache.helix.model.Partition;
 import org.apache.helix.model.Message.Attributes;
-import org.apache.log4j.Logger;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
 public class TestRebalancePipeline extends ZkUnitTestBase {
-  private static final Logger LOG = Logger.getLogger(TestRebalancePipeline.class.getName());
   final String _className = getShortClassName();
 
   @Test
@@ -63,7 +66,7 @@ public class TestRebalancePipeline extends ZkUnitTestBase {
     System.out.println("START " + clusterName + " at " + new Date(System.currentTimeMillis()));
 
     HelixDataAccessor accessor =
-        new ZKHelixDataAccessor(clusterName, new ZkBaseDataAccessor(_gZkClient));
+        new ZKHelixDataAccessor(clusterName, new ZkBaseDataAccessor<ZNRecord>(_gZkClient));
 
     HelixManager manager = new DummyClusterManager(clusterName, accessor);
     ClusterEvent event = new ClusterEvent("testEvent");
@@ -78,10 +81,16 @@ public class TestRebalancePipeline extends ZkUnitTestBase {
     setupIdealState(clusterName, new int[] {
         0, 1
     }, resourceGroups, 1, 2);
+    setupInstances(clusterName, new int[] {
+        0, 1
+    });
     setupLiveInstances(clusterName, new int[] {
         0, 1
     });
     setupStateModel(clusterName);
+
+    ClusterAccessor clusterAccessor = new ClusterAccessor(ClusterId.from(clusterName), accessor);
+    clusterAccessor.initClusterStructure();
 
     // cluster data cache refresh pipeline
     Pipeline dataRefresh = new Pipeline();
@@ -92,7 +101,7 @@ public class TestRebalancePipeline extends ZkUnitTestBase {
     rebalancePipeline.addStage(new ResourceComputationStage());
     rebalancePipeline.addStage(new CurrentStateComputationStage());
     rebalancePipeline.addStage(new BestPossibleStateCalcStage());
-    rebalancePipeline.addStage(new MessageGenerationPhase());
+    rebalancePipeline.addStage(new MessageGenerationStage());
     rebalancePipeline.addStage(new MessageSelectionStage());
     rebalancePipeline.addStage(new MessageThrottleStage());
     rebalancePipeline.addStage(new TaskAssignmentStage());
@@ -105,14 +114,14 @@ public class TestRebalancePipeline extends ZkUnitTestBase {
 
     runPipeline(event, dataRefresh);
     runPipeline(event, rebalancePipeline);
-    MessageSelectionStageOutput msgSelOutput =
-        event.getAttribute(AttributeName.MESSAGES_SELECTED.toString());
+    MessageOutput msgSelOutput = event.getAttribute(AttributeName.MESSAGES_SELECTED.toString());
     List<Message> messages =
-        msgSelOutput.getMessages(resourceName, new Partition(resourceName + "_0"));
+        msgSelOutput.getMessages(ResourceId.from(resourceName),
+            PartitionId.from(resourceName + "_0"));
     Assert.assertEquals(messages.size(), 1, "Should output 1 message: OFFLINE-SLAVE for node0");
     Message message = messages.get(0);
-    Assert.assertEquals(message.getFromState(), "OFFLINE");
-    Assert.assertEquals(message.getToState(), "SLAVE");
+    Assert.assertEquals(message.getTypedFromState().toString(), "OFFLINE");
+    Assert.assertEquals(message.getTypedToState().toString(), "SLAVE");
     Assert.assertEquals(message.getTgtName(), "localhost_0");
 
     // round2: updates node0 currentState to SLAVE but keep the
@@ -123,7 +132,9 @@ public class TestRebalancePipeline extends ZkUnitTestBase {
     runPipeline(event, dataRefresh);
     runPipeline(event, rebalancePipeline);
     msgSelOutput = event.getAttribute(AttributeName.MESSAGES_SELECTED.toString());
-    messages = msgSelOutput.getMessages(resourceName, new Partition(resourceName + "_0"));
+    messages =
+        msgSelOutput.getMessages(ResourceId.from(resourceName),
+            PartitionId.from(resourceName + "_0"));
     Assert.assertEquals(messages.size(), 0, "Should NOT output 1 message: SLAVE-MASTER for node1");
 
     System.out.println("END " + clusterName + " at " + new Date(System.currentTimeMillis()));
@@ -136,7 +147,7 @@ public class TestRebalancePipeline extends ZkUnitTestBase {
     System.out.println("START " + clusterName + " at " + new Date(System.currentTimeMillis()));
 
     HelixDataAccessor accessor =
-        new ZKHelixDataAccessor(clusterName, new ZkBaseDataAccessor(_gZkClient));
+        new ZKHelixDataAccessor(clusterName, new ZkBaseDataAccessor<ZNRecord>(_gZkClient));
     HelixManager manager = new DummyClusterManager(clusterName, accessor);
     ClusterEvent event = new ClusterEvent("testEvent");
 
@@ -160,8 +171,13 @@ public class TestRebalancePipeline extends ZkUnitTestBase {
         0, 1
     });
 
-    TestHelper
-        .startController(clusterName, "controller_0", ZK_ADDR, HelixControllerMain.STANDALONE);
+    ClusterAccessor clusterAccessor = new ClusterAccessor(ClusterId.from(clusterName), accessor);
+    clusterAccessor.initClusterStructure();
+
+
+    ClusterControllerManager controller =
+        new ClusterControllerManager(ZK_ADDR, clusterName, "controller_0");
+    controller.syncStart();
 
     // round1: controller sends O->S to both node0 and node1
     Thread.sleep(1000);
@@ -211,7 +227,7 @@ public class TestRebalancePipeline extends ZkUnitTestBase {
     System.out.println("START " + clusterName + " at " + new Date(System.currentTimeMillis()));
 
     HelixDataAccessor accessor =
-        new ZKHelixDataAccessor(clusterName, new ZkBaseDataAccessor(_gZkClient));
+        new ZKHelixDataAccessor(clusterName, new ZkBaseDataAccessor<ZNRecord>(_gZkClient));
     HelixManager manager = new DummyClusterManager(clusterName, accessor);
     ClusterEvent event = new ClusterEvent("testEvent");
     event.addAttribute("helixmanager", manager);
@@ -225,10 +241,16 @@ public class TestRebalancePipeline extends ZkUnitTestBase {
     setupIdealState(clusterName, new int[] {
         0, 1
     }, resourceGroups, 1, 2);
+    setupInstances(clusterName, new int[] {
+        0, 1
+    });
     setupLiveInstances(clusterName, new int[] {
         0, 1
     });
     setupStateModel(clusterName);
+
+    ClusterAccessor clusterAccessor = new ClusterAccessor(ClusterId.from(clusterName), accessor);
+    clusterAccessor.initClusterStructure();
 
     // cluster data cache refresh pipeline
     Pipeline dataRefresh = new Pipeline();
@@ -239,7 +261,7 @@ public class TestRebalancePipeline extends ZkUnitTestBase {
     rebalancePipeline.addStage(new ResourceComputationStage());
     rebalancePipeline.addStage(new CurrentStateComputationStage());
     rebalancePipeline.addStage(new BestPossibleStateCalcStage());
-    rebalancePipeline.addStage(new MessageGenerationPhase());
+    rebalancePipeline.addStage(new MessageGenerationStage());
     rebalancePipeline.addStage(new MessageSelectionStage());
     rebalancePipeline.addStage(new MessageThrottleStage());
     rebalancePipeline.addStage(new TaskAssignmentStage());
@@ -252,14 +274,14 @@ public class TestRebalancePipeline extends ZkUnitTestBase {
 
     runPipeline(event, dataRefresh);
     runPipeline(event, rebalancePipeline);
-    MessageSelectionStageOutput msgSelOutput =
-        event.getAttribute(AttributeName.MESSAGES_SELECTED.toString());
+    MessageOutput msgSelOutput = event.getAttribute(AttributeName.MESSAGES_SELECTED.toString());
     List<Message> messages =
-        msgSelOutput.getMessages(resourceName, new Partition(resourceName + "_0"));
+        msgSelOutput.getMessages(ResourceId.from(resourceName),
+            PartitionId.from(resourceName + "_0"));
     Assert.assertEquals(messages.size(), 1, "Should output 1 message: OFFLINE-SLAVE for node0");
     Message message = messages.get(0);
-    Assert.assertEquals(message.getFromState(), "OFFLINE");
-    Assert.assertEquals(message.getToState(), "SLAVE");
+    Assert.assertEquals(message.getTypedFromState().toString(), "OFFLINE");
+    Assert.assertEquals(message.getTypedToState().toString(), "SLAVE");
     Assert.assertEquals(message.getTgtName(), "localhost_0");
 
     // round2: drop resource, but keep the
@@ -270,13 +292,15 @@ public class TestRebalancePipeline extends ZkUnitTestBase {
     runPipeline(event, dataRefresh);
     runPipeline(event, rebalancePipeline);
     msgSelOutput = event.getAttribute(AttributeName.MESSAGES_SELECTED.toString());
-    messages = msgSelOutput.getMessages(resourceName, new Partition(resourceName + "_0"));
+    messages =
+        msgSelOutput.getMessages(ResourceId.from(resourceName),
+            PartitionId.from(resourceName + "_0"));
     Assert.assertEquals(messages.size(), 1,
         "Should output only 1 message: OFFLINE->DROPPED for localhost_1");
 
     message = messages.get(0);
-    Assert.assertEquals(message.getFromState(), "SLAVE");
-    Assert.assertEquals(message.getToState(), "OFFLINE");
+    Assert.assertEquals(message.getTypedFromState().toString(), "SLAVE");
+    Assert.assertEquals(message.getTypedToState().toString(), "OFFLINE");
     Assert.assertEquals(message.getTgtName(), "localhost_1");
 
     // round3: remove O->S for localhost_0, controller should now send O->DROPPED to
@@ -287,12 +311,14 @@ public class TestRebalancePipeline extends ZkUnitTestBase {
     runPipeline(event, dataRefresh);
     runPipeline(event, rebalancePipeline);
     msgSelOutput = event.getAttribute(AttributeName.MESSAGES_SELECTED.toString());
-    messages = msgSelOutput.getMessages(resourceName, new Partition(resourceName + "_0"));
+    messages =
+        msgSelOutput.getMessages(ResourceId.from(resourceName),
+            PartitionId.from(resourceName + "_0"));
     Assert.assertEquals(messages.size(), 1,
         "Should output 1 message: OFFLINE->DROPPED for localhost_0");
     message = messages.get(0);
-    Assert.assertEquals(message.getFromState(), "OFFLINE");
-    Assert.assertEquals(message.getToState(), "DROPPED");
+    Assert.assertEquals(message.getTypedFromState().toString(), "OFFLINE");
+    Assert.assertEquals(message.getTypedToState().toString(), "DROPPED");
     Assert.assertEquals(message.getTgtName(), "localhost_0");
 
     System.out.println("END " + clusterName + " at " + new Date(System.currentTimeMillis()));
@@ -306,7 +332,7 @@ public class TestRebalancePipeline extends ZkUnitTestBase {
     System.out.println("START " + clusterName + " at " + new Date(System.currentTimeMillis()));
 
     HelixDataAccessor accessor =
-        new ZKHelixDataAccessor(clusterName, new ZkBaseDataAccessor(_gZkClient));
+        new ZKHelixDataAccessor(clusterName, new ZkBaseDataAccessor<ZNRecord>(_gZkClient));
     HelixManager manager = new DummyClusterManager(clusterName, accessor);
     ClusterEvent event = new ClusterEvent("testEvent");
     event.addAttribute("helixmanager", manager);
@@ -320,10 +346,16 @@ public class TestRebalancePipeline extends ZkUnitTestBase {
     setupIdealState(clusterName, new int[] {
         0, 1
     }, resourceGroups, 1, 2);
+    setupInstances(clusterName, new int[] {
+      1
+    });
     setupLiveInstances(clusterName, new int[] {
       1
     });
     setupStateModel(clusterName);
+
+    ClusterAccessor clusterAccessor = new ClusterAccessor(ClusterId.from(clusterName), accessor);
+    clusterAccessor.initClusterStructure();
 
     // cluster data cache refresh pipeline
     Pipeline dataRefresh = new Pipeline();
@@ -334,7 +366,7 @@ public class TestRebalancePipeline extends ZkUnitTestBase {
     rebalancePipeline.addStage(new ResourceComputationStage());
     rebalancePipeline.addStage(new CurrentStateComputationStage());
     rebalancePipeline.addStage(new BestPossibleStateCalcStage());
-    rebalancePipeline.addStage(new MessageGenerationPhase());
+    rebalancePipeline.addStage(new MessageGenerationStage());
     rebalancePipeline.addStage(new MessageSelectionStage());
     rebalancePipeline.addStage(new MessageThrottleStage());
     rebalancePipeline.addStage(new TaskAssignmentStage());
@@ -345,18 +377,21 @@ public class TestRebalancePipeline extends ZkUnitTestBase {
 
     runPipeline(event, dataRefresh);
     runPipeline(event, rebalancePipeline);
-    MessageSelectionStageOutput msgSelOutput =
-        event.getAttribute(AttributeName.MESSAGES_SELECTED.toString());
+    MessageOutput msgSelOutput = event.getAttribute(AttributeName.MESSAGES_SELECTED.toString());
     List<Message> messages =
-        msgSelOutput.getMessages(resourceName, new Partition(resourceName + "_0"));
+        msgSelOutput.getMessages(ResourceId.from(resourceName),
+            PartitionId.from(resourceName + "_0"));
     Assert.assertEquals(messages.size(), 1, "Should output 1 message: SLAVE-MASTER for node1");
     Message message = messages.get(0);
-    Assert.assertEquals(message.getFromState(), "SLAVE");
-    Assert.assertEquals(message.getToState(), "MASTER");
+    Assert.assertEquals(message.getTypedFromState().toString(), "SLAVE");
+    Assert.assertEquals(message.getTypedToState().toString(), "MASTER");
     Assert.assertEquals(message.getTgtName(), "localhost_1");
 
     // round2: updates node0 currentState to SLAVE but keep the
     // message, make sure controller should not send S->M until removal is done
+    setupInstances(clusterName, new int[] {
+      0
+    });
     setupLiveInstances(clusterName, new int[] {
       0
     });
@@ -366,7 +401,9 @@ public class TestRebalancePipeline extends ZkUnitTestBase {
     runPipeline(event, dataRefresh);
     runPipeline(event, rebalancePipeline);
     msgSelOutput = event.getAttribute(AttributeName.MESSAGES_SELECTED.toString());
-    messages = msgSelOutput.getMessages(resourceName, new Partition(resourceName + "_0"));
+    messages =
+        msgSelOutput.getMessages(ResourceId.from(resourceName),
+            PartitionId.from(resourceName + "_0"));
     Assert.assertEquals(messages.size(), 0, "Should NOT output 1 message: SLAVE-MASTER for node0");
 
     System.out.println("END " + clusterName + " at " + new Date(System.currentTimeMillis()));
@@ -376,13 +413,28 @@ public class TestRebalancePipeline extends ZkUnitTestBase {
   protected void setCurrentState(String clusterName, String instance, String resourceGroupName,
       String resourceKey, String sessionId, String state) {
     ZKHelixDataAccessor accessor =
-        new ZKHelixDataAccessor(clusterName, new ZkBaseDataAccessor(_gZkClient));
+        new ZKHelixDataAccessor(clusterName, new ZkBaseDataAccessor<ZNRecord>(_gZkClient));
     Builder keyBuilder = accessor.keyBuilder();
 
     CurrentState curState = new CurrentState(resourceGroupName);
-    curState.setState(resourceKey, state);
-    curState.setSessionId(sessionId);
+    curState.setState(PartitionId.from(resourceKey), State.from(state));
+    curState.setSessionId(SessionId.from(sessionId));
     curState.setStateModelDefRef("MasterSlave");
     accessor.setProperty(keyBuilder.currentState(instance, sessionId, resourceGroupName), curState);
+  }
+
+  @Override
+  protected void setupInstances(String clusterName, int[] instances) {
+    ZKHelixDataAccessor accessor =
+        new ZKHelixDataAccessor(clusterName, new ZkBaseDataAccessor<ZNRecord>(_gZkClient));
+    Builder keyBuilder = accessor.keyBuilder();
+    for (int i = 0; i < instances.length; i++) {
+      String instance = "localhost_" + instances[i];
+      InstanceConfig instanceConfig = new InstanceConfig(instance);
+      instanceConfig.setHostName("localhost");
+      instanceConfig.setPort("" + instances[i]);
+      instanceConfig.setInstanceEnabled(true);
+      accessor.setProperty(keyBuilder.instanceConfig(instance), instanceConfig);
+    }
   }
 }

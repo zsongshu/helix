@@ -27,14 +27,22 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.Map.Entry;
 
 import org.apache.helix.HelixManager;
 import org.apache.helix.ZNRecord;
+import org.apache.helix.api.State;
+import org.apache.helix.api.id.ParticipantId;
+import org.apache.helix.api.id.PartitionId;
+import org.apache.helix.api.id.ResourceId;
+import org.apache.helix.model.ResourceAssignment;
 import org.apache.log4j.Logger;
+
+import com.google.common.base.Functions;
+import com.google.common.collect.Lists;
 
 public class AutoRebalanceStrategy {
 
@@ -79,12 +87,58 @@ public class AutoRebalanceStrategy {
   }
 
   /**
-   * Initialize the strategy with a default placement scheme and no
+   * Initialize the strategy with a default placement scheme
    * @see #AutoRebalanceStrategy(String, List, LinkedHashMap, int, ReplicaPlacementScheme)
    */
   public AutoRebalanceStrategy(String resourceName, final List<String> partitions,
       final LinkedHashMap<String, Integer> states) {
     this(resourceName, partitions, states, Integer.MAX_VALUE, new DefaultPlacementScheme());
+  }
+
+  /**
+   * Constructor to support logically-typed Helix components
+   * @param resourceId the resource for which to compute an assignment
+   * @param partitions the partitions of the resource
+   * @param states the states and counts for each state
+   * @param maximumPerNode the maximum number of replicas per node
+   * @param placementScheme the scheme to use for preferred replica locations. If null, this is
+   *          {@link DefaultPlacementScheme}
+   */
+  public AutoRebalanceStrategy(ResourceId resourceId, final List<PartitionId> partitions,
+      final LinkedHashMap<State, Integer> states, int maximumPerNode,
+      ReplicaPlacementScheme placementScheme) {
+    LinkedHashMap<String, Integer> rawStateCountMap = new LinkedHashMap<String, Integer>();
+    for (State state : states.keySet()) {
+      rawStateCountMap.put(state.toString(), states.get(state));
+    }
+    List<String> partitionNames = Lists.transform(partitions, Functions.toStringFunction());
+    _resourceName = resourceId.stringify();
+    _partitions = partitionNames;
+    _states = rawStateCountMap;
+    _maximumPerNode = maximumPerNode;
+    if (placementScheme != null) {
+      _placementScheme = placementScheme;
+    } else {
+      _placementScheme = new DefaultPlacementScheme();
+    }
+  }
+
+  /**
+   * Wrap {@link #computePartitionAssignment(List, Map, List)} with a function that takes concrete
+   * types
+   * @param liveNodes list of live participant ids
+   * @param currentMapping map of partition id to map of participant id to state
+   * @param allNodes list of all participant ids
+   * @return the preference list and replica mapping
+   */
+  public ZNRecord typedComputePartitionAssignment(final List<ParticipantId> liveNodes,
+      final Map<PartitionId, Map<ParticipantId, State>> currentMapping,
+      final List<ParticipantId> allNodes) {
+    final List<String> rawLiveNodes = Lists.transform(liveNodes, Functions.toStringFunction());
+    final List<String> rawAllNodes = Lists.transform(allNodes, Functions.toStringFunction());
+    final Map<String, Map<String, String>> rawCurrentMapping =
+        ResourceAssignment.stringMapsFromReplicaMaps(currentMapping);
+    return computePartitionAssignment(rawLiveNodes, rawCurrentMapping, rawAllNodes);
   }
 
   /**
@@ -96,23 +150,27 @@ public class AutoRebalanceStrategy {
    */
   public ZNRecord computePartitionAssignment(final List<String> liveNodes,
       final Map<String, Map<String, String>> currentMapping, final List<String> allNodes) {
+    List<String> sortedLiveNodes = new ArrayList<String>(liveNodes);
+    Collections.sort(sortedLiveNodes);
+    List<String> sortedAllNodes = new ArrayList<String>(allNodes);
+    Collections.sort(sortedAllNodes);
     int numReplicas = countStateReplicas();
     ZNRecord znRecord = new ZNRecord(_resourceName);
-    if (liveNodes.size() == 0) {
+    if (sortedLiveNodes.size() == 0) {
       return znRecord;
     }
-    int distRemainder = (numReplicas * _partitions.size()) % liveNodes.size();
-    int distFloor = (numReplicas * _partitions.size()) / liveNodes.size();
+    int distRemainder = (numReplicas * _partitions.size()) % sortedLiveNodes.size();
+    int distFloor = (numReplicas * _partitions.size()) / sortedLiveNodes.size();
     _nodeMap = new HashMap<String, Node>();
     _liveNodesList = new ArrayList<Node>();
 
-    for (String id : allNodes) {
+    for (String id : sortedAllNodes) {
       Node node = new Node(id);
       node.capacity = 0;
       node.hasCeilingCapacity = false;
       _nodeMap.put(id, node);
     }
-    for (int i = 0; i < liveNodes.size(); i++) {
+    for (int i = 0; i < sortedLiveNodes.size(); i++) {
       boolean usingCeiling = false;
       int targetSize = (_maximumPerNode > 0) ? Math.min(distFloor, _maximumPerNode) : distFloor;
       if (distRemainder > 0 && targetSize < _maximumPerNode) {
@@ -120,7 +178,7 @@ public class AutoRebalanceStrategy {
         distRemainder = distRemainder - 1;
         usingCeiling = true;
       }
-      Node node = _nodeMap.get(liveNodes.get(i));
+      Node node = _nodeMap.get(sortedLiveNodes.get(i));
       node.isAlive = true;
       node.capacity = targetSize;
       node.hasCeilingCapacity = usingCeiling;
@@ -131,7 +189,7 @@ public class AutoRebalanceStrategy {
     _stateMap = generateStateMap();
 
     // compute the preferred mapping if all nodes were up
-    _preferredAssignment = computePreferredPlacement(allNodes);
+    _preferredAssignment = computePreferredPlacement(sortedAllNodes);
 
     // logger.info("preferred mapping:"+ preferredAssignment);
     // from current mapping derive the ones in preferred location
@@ -162,8 +220,8 @@ public class AutoRebalanceStrategy {
    * and its preferred node is under capacity.
    */
   private void moveNonPreferredReplicasToPreferred() {
-    // iterate through non preferred and see if we can move them to
-    // preferredlocation if the donor has more than it should and stealer has
+    // iterate through non preferred and see if we can move them to the
+    // preferred location if the donor has more than it should and stealer has
     // enough capacity
     Iterator<Entry<Replica, Node>> iterator = _existingNonPreferredAssignment.entrySet().iterator();
     while (iterator.hasNext()) {
@@ -177,6 +235,8 @@ public class AutoRebalanceStrategy {
         receiver.currentlyAssigned = receiver.currentlyAssigned + 1;
         donor.nonPreferred.remove(replica);
         receiver.preferred.add(replica);
+        donor.newReplicas.remove(replica);
+        receiver.newReplicas.add(replica);
         iterator.remove();
       }
     }
@@ -199,6 +259,7 @@ public class AutoRebalanceStrategy {
         if (receiver.capacity > receiver.currentlyAssigned && receiver.canAdd(replica)) {
           receiver.currentlyAssigned = receiver.currentlyAssigned + 1;
           receiver.nonPreferred.add(replica);
+          receiver.newReplicas.add(replica);
           added = true;
           break;
         }
@@ -293,65 +354,87 @@ public class AutoRebalanceStrategy {
     // The list fields are also keyed on partition and list all the nodes serving that partition.
     // This is useful to verify that there is no node serving multiple replicas of the same
     // partition.
+    Map<String, List<String>> newPreferences = new TreeMap<String, List<String>>();
     for (String partition : _partitions) {
       znRecord.setMapField(partition, new TreeMap<String, String>());
       znRecord.setListField(partition, new ArrayList<String>());
+      newPreferences.put(partition, new ArrayList<String>());
     }
-    int count = countStateReplicas();
-    for (int replicaId = 0; replicaId < count; replicaId++) {
-      for (Node node : _liveNodesList) {
-        for (Replica replica : node.preferred) {
-          if (replicaId == replica.replicaId) {
-            znRecord.getListField(replica.partition).add(node.id);
-          }
-        }
-        for (Replica replica : node.nonPreferred) {
-          if (replicaId == replica.replicaId) {
-            znRecord.getListField(replica.partition).add(node.id);
-          }
-        }
-      }
-    }
-    normalizePreferenceLists(znRecord.getListFields());
 
+    // for preference lists, the rough priority that we want is:
+    // [existing preferred, existing non-preferred, non-existing preferred, non-existing
+    // non-preferred]
     for (Node node : _liveNodesList) {
       for (Replica replica : node.preferred) {
-        znRecord.getMapField(replica.partition).put(node.id, _stateMap.get(replica.replicaId));
+        if (node.newReplicas.contains(replica)) {
+          newPreferences.get(replica.partition).add(node.id);
+        } else {
+          znRecord.getListField(replica.partition).add(node.id);
+        }
       }
+    }
+    for (Node node : _liveNodesList) {
       for (Replica replica : node.nonPreferred) {
-        znRecord.getMapField(replica.partition).put(node.id, _stateMap.get(replica.replicaId));
+        if (node.newReplicas.contains(replica)) {
+          newPreferences.get(replica.partition).add(node.id);
+        } else {
+          znRecord.getListField(replica.partition).add(node.id);
+        }
+      }
+    }
+    normalizePreferenceLists(znRecord.getListFields(), newPreferences);
+
+    // generate preference maps based on the preference lists
+    for (String partition : _partitions) {
+      List<String> preferenceList = znRecord.getListField(partition);
+      int i = 0;
+      for (String participant : preferenceList) {
+        znRecord.getMapField(partition).put(participant, _stateMap.get(i));
+        i++;
       }
     }
   }
 
   /**
-   * Adjust preference lists to reduce the number of same replicas on an instance
+   * Adjust preference lists to reduce the number of same replicas on an instance. This will
+   * separately normalize two sets of preference lists, and then append the results of the second
+   * set to those of the first. This basically ensures that existing replicas are automatically
+   * preferred.
    * @param preferenceLists map of (partition --> list of nodes)
+   * @param newPreferences map containing node preferences not consistent with the current
+   *          assignment
    */
-  private void normalizePreferenceLists(Map<String, List<String>> preferenceLists) {
-    Map<String, Map<Integer, Integer>> nodeReplicaCounts =
-        new HashMap<String, Map<Integer, Integer>>();
+  private void normalizePreferenceLists(Map<String, List<String>> preferenceLists,
+      Map<String, List<String>> newPreferences) {
+    Map<String, Map<String, Integer>> nodeReplicaCounts =
+        new HashMap<String, Map<String, Integer>>();
     for (String partition : preferenceLists.keySet()) {
       normalizePreferenceList(preferenceLists.get(partition), nodeReplicaCounts);
+    }
+    for (String partition : newPreferences.keySet()) {
+      normalizePreferenceList(newPreferences.get(partition), nodeReplicaCounts);
+      preferenceLists.get(partition).addAll(newPreferences.get(partition));
     }
   }
 
   /**
    * Adjust a single preference list for replica assignment imbalance
    * @param preferenceList list of node names
-   * @param nodeReplicaCounts map of (node --> replica id --> count)
+   * @param nodeReplicaCounts map of (node --> state --> count)
    */
   private void normalizePreferenceList(List<String> preferenceList,
-      Map<String, Map<Integer, Integer>> nodeReplicaCounts) {
+      Map<String, Map<String, Integer>> nodeReplicaCounts) {
+    // make this a LinkedHashSet to preserve iteration order
     Set<String> notAssigned = new LinkedHashSet<String>(preferenceList);
     List<String> newPreferenceList = new ArrayList<String>();
     int replicas = Math.min(countStateReplicas(), preferenceList.size());
     for (int i = 0; i < replicas; i++) {
-      String node = getMinimumNodeForReplica(i, notAssigned, nodeReplicaCounts);
+      String state = _stateMap.get(i);
+      String node = getMinimumNodeForReplica(state, notAssigned, nodeReplicaCounts);
       newPreferenceList.add(node);
       notAssigned.remove(node);
-      Map<Integer, Integer> counts = nodeReplicaCounts.get(node);
-      counts.put(i, counts.get(i) + 1);
+      Map<String, Integer> counts = nodeReplicaCounts.get(node);
+      counts.put(state, counts.get(state) + 1);
     }
     preferenceList.clear();
     preferenceList.addAll(newPreferenceList);
@@ -359,17 +442,17 @@ public class AutoRebalanceStrategy {
 
   /**
    * Get the node which hosts the fewest of a given replica
-   * @param replicaId the replica
+   * @param state the state
    * @param nodes nodes to check
    * @param nodeReplicaCounts current assignment of replicas
    * @return the node most willing to accept the replica
    */
-  private String getMinimumNodeForReplica(int replicaId, Set<String> nodes,
-      Map<String, Map<Integer, Integer>> nodeReplicaCounts) {
+  private String getMinimumNodeForReplica(String state, Set<String> nodes,
+      Map<String, Map<String, Integer>> nodeReplicaCounts) {
     String minimalNode = null;
     int minimalCount = Integer.MAX_VALUE;
     for (String node : nodes) {
-      int count = getReplicaCountForNode(replicaId, node, nodeReplicaCounts);
+      int count = getReplicaCountForNode(state, node, nodeReplicaCounts);
       if (count < minimalCount) {
         minimalCount = count;
         minimalNode = node;
@@ -380,25 +463,25 @@ public class AutoRebalanceStrategy {
 
   /**
    * Safe check for the number of replicas of a given id assiged to a node
-   * @param replicaId the replica to assign
+   * @param state the state to assign
    * @param node the node to check
    * @param nodeReplicaCounts a map of node to replica id and counts
    * @return the number of currently assigned replicas of the given id
    */
-  private int getReplicaCountForNode(int replicaId, String node,
-      Map<String, Map<Integer, Integer>> nodeReplicaCounts) {
+  private int getReplicaCountForNode(String state, String node,
+      Map<String, Map<String, Integer>> nodeReplicaCounts) {
     if (!nodeReplicaCounts.containsKey(node)) {
-      Map<Integer, Integer> replicaCounts = new HashMap<Integer, Integer>();
-      replicaCounts.put(replicaId, 0);
+      Map<String, Integer> replicaCounts = new HashMap<String, Integer>();
+      replicaCounts.put(state, 0);
       nodeReplicaCounts.put(node, replicaCounts);
       return 0;
     }
-    Map<Integer, Integer> replicaCounts = nodeReplicaCounts.get(node);
-    if (!replicaCounts.containsKey(replicaId)) {
-      replicaCounts.put(replicaId, 0);
+    Map<String, Integer> replicaCounts = nodeReplicaCounts.get(node);
+    if (!replicaCounts.containsKey(state)) {
+      replicaCounts.put(state, 0);
       return 0;
     }
-    return replicaCounts.get(replicaId);
+    return replicaCounts.get(state);
   }
 
   /**
@@ -562,7 +645,6 @@ public class AutoRebalanceStrategy {
    * of replicas assigned to it, so it can decide if it can receive additional replicas.
    */
   class Node {
-
     public int currentlyAssigned;
     public int capacity;
     public boolean hasCeilingCapacity;
@@ -570,10 +652,12 @@ public class AutoRebalanceStrategy {
     boolean isAlive;
     private List<Replica> preferred;
     private List<Replica> nonPreferred;
+    private Set<Replica> newReplicas;
 
     public Node(String id) {
       preferred = new ArrayList<Replica>();
       nonPreferred = new ArrayList<Replica>();
+      newReplicas = new TreeSet<Replica>();
       currentlyAssigned = 0;
       isAlive = false;
       this.id = id;
@@ -626,6 +710,7 @@ public class AutoRebalanceStrategy {
       capacity++;
       currentlyAssigned++;
       nonPreferred.add(replica);
+      newReplicas.add(replica);
     }
 
     @Override
@@ -642,7 +727,6 @@ public class AutoRebalanceStrategy {
    * and an identifier signifying a specific replica of a given partition and state.
    */
   class Replica implements Comparable<Replica> {
-
     private String partition;
     private int replicaId; // this is a partition-relative id
     private String format;
@@ -650,7 +734,7 @@ public class AutoRebalanceStrategy {
     public Replica(String partition, int replicaId) {
       this.partition = partition;
       this.replicaId = replicaId;
-      this.format = partition + "|" + replicaId;
+      this.format = this.partition + "|" + this.replicaId;
     }
 
     @Override
@@ -674,7 +758,7 @@ public class AutoRebalanceStrategy {
     @Override
     public int compareTo(Replica that) {
       if (that instanceof Replica) {
-        return this.format.compareTo(((Replica) that).format);
+        return this.format.compareTo(that.format);
       }
       return -1;
     }

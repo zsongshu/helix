@@ -76,7 +76,18 @@ public class ZKHelixDataAccessor implements HelixDataAccessor, ControllerChangeL
     PropertyType type = key.getType();
     String path = key.getPath();
     int options = constructOptions(type);
-    return _baseDataAccessor.create(path, value.getRecord(), options);
+    boolean success = false;
+    switch (type) {
+    case STATEMODELDEFS:
+      if (value != null && value.isValid()) {
+        success = _baseDataAccessor.create(path, value.getRecord(), options);
+      }
+      break;
+    default:
+      success = _baseDataAccessor.create(path, value == null ? null : value.getRecord(), options);
+      break;
+    }
+    return success;
   }
 
   @Override
@@ -431,6 +442,11 @@ public class ZKHelixDataAccessor implements HelixDataAccessor, ControllerChangeL
           bucketizedRecords.set(i, childBucketizedRecords);
         }
         break;
+      case STATEMODELDEFS:
+        if (value.isValid()) {
+          records.add(value.getRecord());
+        }
+        break;
       default:
         records.add(value.getRecord());
         break;
@@ -453,7 +469,6 @@ public class ZKHelixDataAccessor implements HelixDataAccessor, ControllerChangeL
 
     // TODO: set success accordingly
     _baseDataAccessor.setChildren(allBucketizedPaths, allBucketizedRecords, options);
-
     return success;
   }
 

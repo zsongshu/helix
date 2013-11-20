@@ -31,7 +31,6 @@ import org.apache.helix.HelixManager;
 import org.apache.helix.TestHelper;
 import org.apache.helix.ZNRecord;
 import org.apache.helix.integration.ZkStandAloneCMTestBase;
-import org.apache.helix.josql.ClusterJosqlQueryProcessor;
 import org.apache.helix.model.LiveInstance.LiveInstanceProperty;
 import org.testng.Assert;
 import org.testng.annotations.Test;
@@ -41,8 +40,8 @@ public class TestJosqlProcessor extends ZkStandAloneCMTestBase {
     "integrationTest"
   })
   public void testJosqlQuery() throws Exception {
-    HelixManager manager =
-        ((TestHelper.StartCMResult) (_startCMResultMap.values().toArray()[0]))._manager;
+    HelixManager manager = _participants[0];
+    // ((TestHelper.StartCMResult) (_startCMResultMap.values().toArray()[0]))._manager;
 
     // Find the instance name that contains partition TestDB_2 and state is 'MASTER'
     String SQL =
@@ -184,8 +183,8 @@ public class TestJosqlProcessor extends ZkStandAloneCMTestBase {
 
   @Test(groups = ("unitTest"))
   public void testOrderby() throws Exception {
-    HelixManager manager =
-        ((TestHelper.StartCMResult) (_startCMResultMap.values().toArray()[0]))._manager;
+    HelixManager manager = _participants[0];
+    // ((TestHelper.StartCMResult) (_startCMResultMap.values().toArray()[0]))._manager;
 
     Map<String, ZNRecord> scnMap = new HashMap<String, ZNRecord>();
     for (int i = 0; i < NODE_NR; i++) {

@@ -34,16 +34,27 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 import org.apache.helix.HelixDefinedState;
-import org.apache.helix.Mocks.MockAccessor;
-import org.apache.helix.PropertyKey.Builder;
 import org.apache.helix.ZNRecord;
+import org.apache.helix.api.State;
+import org.apache.helix.api.config.ClusterConfig;
+import org.apache.helix.api.id.ClusterId;
+import org.apache.helix.api.id.ParticipantId;
+import org.apache.helix.api.id.PartitionId;
+import org.apache.helix.api.id.ResourceId;
+import org.apache.helix.api.id.StateModelDefId;
 import org.apache.helix.controller.rebalancer.util.ConstraintBasedAssignment;
-import org.apache.helix.controller.stages.ClusterDataCache;
 import org.apache.helix.controller.strategy.AutoRebalanceStrategy.ReplicaPlacementScheme;
-import org.apache.helix.model.LiveInstance;
+import org.apache.helix.model.IdealState;
 import org.apache.helix.model.StateModelDefinition;
+import org.apache.helix.tools.StateModelConfigGenerator;
 import org.apache.log4j.Logger;
+import org.testng.Assert;
 import org.testng.annotations.Test;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 
 public class TestAutoRebalanceStrategy {
   private static Logger logger = Logger.getLogger(TestAutoRebalanceStrategy.class);
@@ -122,13 +133,14 @@ public class TestAutoRebalanceStrategy {
    */
   private StateModelDefinition getIncompleteStateModelDef(String modelName, String initialState,
       LinkedHashMap<String, Integer> states) {
-    StateModelDefinition.Builder builder = new StateModelDefinition.Builder(modelName);
-    builder.initialState(initialState);
-    int i = states.size();
+    StateModelDefinition.Builder builder =
+        new StateModelDefinition.Builder(StateModelDefId.from(modelName));
+    builder.initialState(State.from(initialState));
+    int i = 0;
     for (String state : states.keySet()) {
-      builder.addState(state, i);
-      builder.upperBound(state, states.get(state));
-      i--;
+      builder.addState(State.from(state), i);
+      builder.upperBound(State.from(state), states.get(state));
+      i++;
     }
     return builder.build();
   }
@@ -207,23 +219,28 @@ public class TestAutoRebalanceStrategy {
 
     private Map<String, Map<String, String>> getMapping(final Map<String, List<String>> listResult) {
       final Map<String, Map<String, String>> mapResult = new HashMap<String, Map<String, String>>();
-      ClusterDataCache cache = new ClusterDataCache();
-      MockAccessor accessor = new MockAccessor();
-      Builder keyBuilder = accessor.keyBuilder();
-      for (String node : _liveNodes) {
-        LiveInstance liveInstance = new LiveInstance(node);
-        liveInstance.setSessionId("testSession");
-        accessor.setProperty(keyBuilder.liveInstance(node), liveInstance);
-      }
-      cache.refresh(accessor);
       for (String partition : _partitions) {
-        List<String> preferenceList = listResult.get(partition);
-        Map<String, String> currentStateMap = _currentMapping.get(partition);
-        Set<String> disabled = Collections.emptySet();
-        Map<String, String> assignment =
-            ConstraintBasedAssignment.computeAutoBestStateForPartition(cache, _stateModelDef,
-                preferenceList, currentStateMap, disabled);
-        mapResult.put(partition, assignment);
+        Map<String, String> rawCurStateMap = _currentMapping.get(partition);
+        ClusterConfig cluster =
+            new ClusterConfig.Builder(ClusterId.from("cluster")).addStateModelDefinition(
+                _stateModelDef).build();
+        Set<ParticipantId> liveParticipantSet = Sets.newHashSet();
+        for (String node : _liveNodes) {
+          liveParticipantSet.add(ParticipantId.from(node));
+        }
+        List<ParticipantId> preferenceList =
+            IdealState.preferenceListFromStringList(listResult.get(partition));
+        Set<ParticipantId> disabledParticipantsForPartition = Collections.emptySet();
+        Map<ParticipantId, State> currentStateMap =
+            IdealState.participantStateMapFromStringMap(rawCurStateMap);
+        Map<State, String> upperBounds =
+            ConstraintBasedAssignment.stateConstraints(_stateModelDef,
+                ResourceId.from(RESOURCE_NAME), cluster);
+        Map<ParticipantId, State> assignment =
+            ConstraintBasedAssignment.computeAutoBestStateForPartition(upperBounds,
+                liveParticipantSet, _stateModelDef, preferenceList, currentStateMap,
+                disabledParticipantsForPartition);
+        mapResult.put(partition, IdealState.stringMapFromParticipantStateMap(assignment));
       }
       return mapResult;
     }
@@ -567,5 +584,208 @@ public class TestAutoRebalanceStrategy {
       }
       return null;
     }
+  }
+
+  /**
+   * Tests the following scenario: nodes come up one by one, then one node is taken down. Preference
+   * lists should prefer nodes in the current mapping at all times, but when all nodes are in the
+   * current mapping, then it should distribute states as evenly as possible.
+   */
+  @Test
+  public void testOrphansNotPreferred() {
+    final ResourceId RESOURCE = ResourceId.from("resource");
+    final PartitionId[] PARTITIONS =
+        {
+            PartitionId.from("resource_0"), PartitionId.from("resource_1"),
+            PartitionId.from("resource_2")
+        };
+    final StateModelDefinition STATE_MODEL =
+        new StateModelDefinition(StateModelConfigGenerator.generateConfigForMasterSlave());
+    final int REPLICA_COUNT = 2;
+    final ParticipantId[] NODES = {
+        ParticipantId.from("n0"), ParticipantId.from("n1"), ParticipantId.from("n2")
+    };
+
+    ReplicaPlacementScheme scheme = new AutoRebalanceStrategy.DefaultPlacementScheme();
+    // initial state, one node, no mapping
+    List<ParticipantId> allNodes = Lists.newArrayList(NODES[0]);
+    List<ParticipantId> liveNodes = Lists.newArrayList(NODES[0]);
+    Map<PartitionId, Map<ParticipantId, State>> currentMapping = Maps.newHashMap();
+    for (PartitionId partition : PARTITIONS) {
+      currentMapping.put(partition, new HashMap<ParticipantId, State>());
+    }
+
+    // make sure that when the first node joins, a single replica is assigned fairly
+    List<PartitionId> partitions = ImmutableList.copyOf(PARTITIONS);
+    Map<State, String> upperBounds = Maps.newHashMap();
+    for (State state : STATE_MODEL.getTypedStatesPriorityList()) {
+      upperBounds.put(state, STATE_MODEL.getNumParticipantsPerState(state));
+    }
+    LinkedHashMap<State, Integer> stateCount =
+        ConstraintBasedAssignment.stateCount(upperBounds, STATE_MODEL, liveNodes.size(),
+            REPLICA_COUNT);
+    ZNRecord znRecord =
+        new AutoRebalanceStrategy(RESOURCE, partitions, stateCount, Integer.MAX_VALUE, scheme)
+            .typedComputePartitionAssignment(liveNodes, currentMapping, allNodes);
+    Map<String, List<String>> preferenceLists = znRecord.getListFields();
+    for (PartitionId partition : currentMapping.keySet()) {
+      // make sure these are all MASTER
+      List<String> preferenceList = preferenceLists.get(partition.toString());
+      Assert.assertNotNull(preferenceList, "invalid preference list for " + partition);
+      Assert.assertEquals(preferenceList.size(), 1, "invalid preference list for " + partition);
+    }
+
+    // now assign a replica to the first node in the current mapping, and add a second node
+    allNodes.add(NODES[1]);
+    liveNodes.add(NODES[1]);
+    stateCount =
+        ConstraintBasedAssignment.stateCount(upperBounds, STATE_MODEL, liveNodes.size(),
+            REPLICA_COUNT);
+    for (PartitionId partition : PARTITIONS) {
+      currentMapping.get(partition).put(NODES[0], State.from("MASTER"));
+    }
+    znRecord =
+        new AutoRebalanceStrategy(RESOURCE, partitions, stateCount, Integer.MAX_VALUE, scheme)
+            .typedComputePartitionAssignment(liveNodes, currentMapping, allNodes);
+    preferenceLists = znRecord.getListFields();
+    for (PartitionId partition : currentMapping.keySet()) {
+      List<String> preferenceList = preferenceLists.get(partition.toString());
+      Assert.assertNotNull(preferenceList, "invalid preference list for " + partition);
+      Assert.assertEquals(preferenceList.size(), 2, "invalid preference list for " + partition);
+      Assert.assertEquals(preferenceList.get(0), NODES[0].toString(),
+          "invalid preference list for " + partition);
+      Assert.assertEquals(preferenceList.get(1), NODES[1].toString(),
+          "invalid preference list for " + partition);
+    }
+
+    // now set the current mapping to reflect this update and make sure that it distributes masters
+    for (PartitionId partition : PARTITIONS) {
+      currentMapping.get(partition).put(NODES[1], State.from("SLAVE"));
+    }
+    znRecord =
+        new AutoRebalanceStrategy(RESOURCE, partitions, stateCount, Integer.MAX_VALUE, scheme)
+            .typedComputePartitionAssignment(liveNodes, currentMapping, allNodes);
+    preferenceLists = znRecord.getListFields();
+    Set<String> firstNodes = Sets.newHashSet();
+    for (PartitionId partition : currentMapping.keySet()) {
+      List<String> preferenceList = preferenceLists.get(partition.toString());
+      Assert.assertNotNull(preferenceList, "invalid preference list for " + partition);
+      Assert.assertEquals(preferenceList.size(), 2, "invalid preference list for " + partition);
+      firstNodes.add(preferenceList.get(0));
+    }
+    Assert.assertEquals(firstNodes.size(), 2, "masters not evenly distributed");
+
+    // set a mapping corresponding to a valid mapping for 2 nodes, add a third node, check that the
+    // new node is never the most preferred
+    allNodes.add(NODES[2]);
+    liveNodes.add(NODES[2]);
+    stateCount =
+        ConstraintBasedAssignment.stateCount(upperBounds, STATE_MODEL, liveNodes.size(),
+            REPLICA_COUNT);
+
+    // recall that the other two partitions are [MASTER, SLAVE], which is fine, just reorder one
+    currentMapping.get(PARTITIONS[1]).put(NODES[0], State.from("SLAVE"));
+    currentMapping.get(PARTITIONS[1]).put(NODES[1], State.from("MASTER"));
+    znRecord =
+        new AutoRebalanceStrategy(RESOURCE, partitions, stateCount, Integer.MAX_VALUE, scheme)
+            .typedComputePartitionAssignment(liveNodes, currentMapping, allNodes);
+    preferenceLists = znRecord.getListFields();
+    boolean newNodeUsed = false;
+    for (PartitionId partition : currentMapping.keySet()) {
+      List<String> preferenceList = preferenceLists.get(partition.toString());
+      Assert.assertNotNull(preferenceList, "invalid preference list for " + partition);
+      Assert.assertEquals(preferenceList.size(), 2, "invalid preference list for " + partition);
+      if (preferenceList.contains(NODES[2].toString())) {
+        newNodeUsed = true;
+        Assert.assertEquals(preferenceList.get(1), NODES[2].toString(),
+            "newly added node not at preference list tail for " + partition);
+      }
+    }
+    Assert.assertTrue(newNodeUsed, "not using " + NODES[2]);
+
+    // now remap this to take the new node into account, should go back to balancing masters, slaves
+    // evenly across all nodes
+    for (PartitionId partition : PARTITIONS) {
+      currentMapping.get(partition).clear();
+    }
+    currentMapping.get(PARTITIONS[0]).put(NODES[0], State.from("MASTER"));
+    currentMapping.get(PARTITIONS[0]).put(NODES[1], State.from("SLAVE"));
+    currentMapping.get(PARTITIONS[1]).put(NODES[1], State.from("MASTER"));
+    currentMapping.get(PARTITIONS[1]).put(NODES[2], State.from("SLAVE"));
+    currentMapping.get(PARTITIONS[2]).put(NODES[0], State.from("MASTER"));
+    currentMapping.get(PARTITIONS[2]).put(NODES[2], State.from("SLAVE"));
+    znRecord =
+        new AutoRebalanceStrategy(RESOURCE, partitions, stateCount, Integer.MAX_VALUE, scheme)
+            .typedComputePartitionAssignment(liveNodes, currentMapping, allNodes);
+    preferenceLists = znRecord.getListFields();
+    firstNodes.clear();
+    Set<String> secondNodes = Sets.newHashSet();
+    for (PartitionId partition : currentMapping.keySet()) {
+      List<String> preferenceList = preferenceLists.get(partition.toString());
+      Assert.assertNotNull(preferenceList, "invalid preference list for " + partition);
+      Assert.assertEquals(preferenceList.size(), 2, "invalid preference list for " + partition);
+      firstNodes.add(preferenceList.get(0));
+      secondNodes.add(preferenceList.get(1));
+    }
+    Assert.assertEquals(firstNodes.size(), 3, "masters not distributed evenly");
+    Assert.assertEquals(secondNodes.size(), 3, "slaves not distributed evenly");
+
+    // remove a node now, but use the current mapping with everything balanced just prior
+    liveNodes.remove(0);
+    stateCount =
+        ConstraintBasedAssignment.stateCount(upperBounds, STATE_MODEL, liveNodes.size(),
+            REPLICA_COUNT);
+
+    // remove all references of n0 from the mapping, keep everything else in a legal state
+    for (PartitionId partition : PARTITIONS) {
+      currentMapping.get(partition).clear();
+    }
+    currentMapping.get(PARTITIONS[0]).put(NODES[1], State.from("MASTER"));
+    currentMapping.get(PARTITIONS[1]).put(NODES[1], State.from("MASTER"));
+    currentMapping.get(PARTITIONS[1]).put(NODES[2], State.from("SLAVE"));
+    currentMapping.get(PARTITIONS[2]).put(NODES[2], State.from("MASTER"));
+    znRecord =
+        new AutoRebalanceStrategy(RESOURCE, partitions, stateCount, Integer.MAX_VALUE, scheme)
+            .typedComputePartitionAssignment(liveNodes, currentMapping, allNodes);
+    preferenceLists = znRecord.getListFields();
+    for (PartitionId partition : currentMapping.keySet()) {
+      List<String> preferenceList = preferenceLists.get(partition.toString());
+      Assert.assertNotNull(preferenceList, "invalid preference list for " + partition);
+      Assert.assertEquals(preferenceList.size(), 2, "invalid preference list for " + partition);
+      Map<ParticipantId, State> stateMap = currentMapping.get(partition);
+      for (ParticipantId participant : stateMap.keySet()) {
+        Assert.assertTrue(preferenceList.contains(participant.toString()),
+            "minimal movement violated for " + partition);
+      }
+      for (String participant : preferenceList) {
+        if (!stateMap.containsKey(ParticipantId.from(participant))) {
+          Assert.assertNotSame(preferenceList.get(0), participant,
+              "newly moved replica should not be master for " + partition);
+        }
+      }
+    }
+
+    // finally, adjust the current mapping to reflect 2 nodes and make sure everything's even again
+    for (PartitionId partition : PARTITIONS) {
+      currentMapping.get(partition).clear();
+    }
+    currentMapping.get(PARTITIONS[0]).put(NODES[1], State.from("MASTER"));
+    currentMapping.get(PARTITIONS[0]).put(NODES[2], State.from("SLAVE"));
+    currentMapping.get(PARTITIONS[1]).put(NODES[1], State.from("SLAVE"));
+    currentMapping.get(PARTITIONS[1]).put(NODES[2], State.from("MASTER"));
+    currentMapping.get(PARTITIONS[2]).put(NODES[1], State.from("SLAVE"));
+    currentMapping.get(PARTITIONS[2]).put(NODES[2], State.from("MASTER"));
+    znRecord =
+        new AutoRebalanceStrategy(RESOURCE, partitions, stateCount, Integer.MAX_VALUE, scheme)
+            .typedComputePartitionAssignment(liveNodes, currentMapping, allNodes);
+    preferenceLists = znRecord.getListFields();
+    firstNodes.clear();
+    for (PartitionId partition : currentMapping.keySet()) {
+      List<String> preferenceList = preferenceLists.get(partition.toString());
+      Assert.assertNotNull(preferenceList, "invalid preference list for " + partition);
+      Assert.assertEquals(preferenceList.size(), 2, "invalid preference list for " + partition);
+      firstNodes.add(preferenceList.get(0));
+    }
+    Assert.assertEquals(firstNodes.size(), 2, "masters not evenly distributed");
   }
 }

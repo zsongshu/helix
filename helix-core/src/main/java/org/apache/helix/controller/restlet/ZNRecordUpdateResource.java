@@ -2,19 +2,19 @@ package org.apache.helix.controller.restlet;
 
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
+ * or more contributor license agreements. See the NOTICE file
  * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
+ * regarding copyright ownership. The ASF licenses this file
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
+ * with the License. You may obtain a copy of the License at
+ * 
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
+ * KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations
  * under the License.
  */
@@ -29,39 +29,26 @@ import org.codehaus.jackson.type.TypeReference;
 import org.restlet.data.Form;
 import org.restlet.data.MediaType;
 import org.restlet.data.Status;
-import org.restlet.resource.Representation;
-import org.restlet.resource.Resource;
+import org.restlet.representation.Representation;
+import org.restlet.representation.Variant;
+import org.restlet.resource.ServerResource;
 
 /**
  * REST resource for ZkPropertyTransfer server to receive PUT requests
  * that submits ZNRecordUpdates
  */
-public class ZNRecordUpdateResource extends Resource {
+public class ZNRecordUpdateResource extends ServerResource {
   public static final String UPDATEKEY = "ZNRecordUpdate";
   private static Logger LOG = Logger.getLogger(ZNRecordUpdateResource.class);
 
-  @Override
-  public boolean allowGet() {
-    return false;
+  public ZNRecordUpdateResource() {
+    getVariants().add(new Variant(MediaType.TEXT_PLAIN));
+    getVariants().add(new Variant(MediaType.APPLICATION_JSON));
+    setNegotiated(false);
   }
 
   @Override
-  public boolean allowPost() {
-    return false;
-  }
-
-  @Override
-  public boolean allowPut() {
-    return true;
-  }
-
-  @Override
-  public boolean allowDelete() {
-    return false;
-  }
-
-  @Override
-  public void storeRepresentation(Representation entity) {
+  public Representation put(Representation entity) {
     try {
       ZKPropertyTransferServer server = ZKPropertyTransferServer.getInstance();
 
@@ -86,5 +73,7 @@ public class ZNRecordUpdateResource extends Resource {
       LOG.error("", e);
       getResponse().setStatus(Status.SERVER_ERROR_INTERNAL);
     }
+    return null;
   }
+
 }

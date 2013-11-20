@@ -13,10 +13,14 @@ import java.util.Set;
 import org.apache.helix.HelixAdmin;
 import org.apache.helix.HelixException;
 import org.apache.helix.manager.zk.ZKHelixAdmin;
+import org.apache.helix.manager.zk.ZKHelixManager;
+import org.apache.helix.model.HelixConfigScope;
+import org.apache.helix.model.HelixConfigScope.ConfigScopeProperty;
 import org.apache.helix.model.IdealState;
 import org.apache.helix.model.IdealState.RebalanceMode;
 import org.apache.helix.model.InstanceConfig;
 import org.apache.helix.model.StateModelDefinition;
+import org.apache.helix.model.builder.HelixConfigScopeBuilder;
 import org.apache.helix.tools.YAMLClusterSetup.YAMLClusterConfig.ParticipantConfig;
 import org.apache.helix.tools.YAMLClusterSetup.YAMLClusterConfig.ResourceConfig;
 import org.apache.helix.tools.YAMLClusterSetup.YAMLClusterConfig.ResourceConfig.ConstraintsConfig;
@@ -99,6 +103,26 @@ public class YAMLClusterSetup {
           StateModelDefinition stateModelDef =
               getStateModelDef(resource.stateModel, resource.constraints);
           helixAdmin.addStateModelDef(cfg.clusterName, resource.stateModel.name, stateModelDef);
+        } else {
+          StateModelDefinition stateModelDef = null;
+          if (resource.stateModel.name.equals("MasterSlave")) {
+            stateModelDef =
+                new StateModelDefinition(StateModelConfigGenerator.generateConfigForMasterSlave());
+          } else if (resource.stateModel.name.equals("OnlineOffline")) {
+            stateModelDef =
+                new StateModelDefinition(StateModelConfigGenerator.generateConfigForOnlineOffline());
+          } else if (resource.stateModel.name.equals("LeaderStandby")) {
+            stateModelDef =
+                new StateModelDefinition(StateModelConfigGenerator.generateConfigForLeaderStandby());
+          }
+          if (stateModelDef != null) {
+            try {
+              helixAdmin.addStateModelDef(cfg.clusterName, resource.stateModel.name, stateModelDef);
+            } catch (HelixException e) {
+              LOG.warn("State model definition " + resource.stateModel.name
+                  + " could not be added.");
+            }
+          }
         }
         int partitions = 1;
         int replicas = 1;
@@ -125,6 +149,16 @@ public class YAMLClusterSetup {
         }
         helixAdmin.rebalance(cfg.clusterName, resource.name, replicas);
       }
+    }
+
+    // enable auto join if this option is set
+    if (cfg.autoJoinAllowed != null && cfg.autoJoinAllowed) {
+      HelixConfigScope scope =
+          new HelixConfigScopeBuilder(ConfigScopeProperty.CLUSTER).forCluster(cfg.clusterName)
+              .build();
+      Map<String, String> properties = new HashMap<String, String>();
+      properties.put(ZKHelixManager.ALLOW_PARTICIPANT_AUTO_JOIN, cfg.autoJoinAllowed.toString());
+      helixAdmin.setConfig(scope, properties);
     }
     return cfg;
   }
@@ -226,6 +260,7 @@ public class YAMLClusterSetup {
     public String clusterName;
     public List<ResourceConfig> resources;
     public List<ParticipantConfig> participants;
+    public Boolean autoJoinAllowed;
 
     public static class ResourceConfig {
       public String name;

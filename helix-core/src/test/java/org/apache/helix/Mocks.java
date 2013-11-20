@@ -46,7 +46,6 @@ import org.apache.helix.participant.statemachine.StateModelInfo;
 import org.apache.helix.participant.statemachine.Transition;
 import org.apache.helix.store.zk.ZkHelixPropertyStore;
 import org.apache.zookeeper.data.Stat;
-import org.omg.CORBA._PolicyStub;
 
 public class Mocks {
   public static class MockBaseDataAccessor implements BaseDataAccessor<ZNRecord> {
@@ -473,6 +472,12 @@ public class Mocks {
       return _properties;
     }
 
+    @Override
+    public void addControllerMessageListener(MessageListener listener) {
+      // TODO Auto-generated method stub
+
+    }
+
   }
 
   public static class MockAccessor implements HelixDataAccessor // DataAccessor
@@ -675,7 +680,7 @@ public class Mocks {
     }
 
     @Override
-    public BaseDataAccessor getBaseDataAccessor() {
+    public BaseDataAccessor<ZNRecord> getBaseDataAccessor() {
       // TODO Auto-generated method stub
       return null;
     }

@@ -37,7 +37,6 @@ import org.apache.helix.manager.zk.ZkAsyncCallbacks.GetDataCallbackHandler;
 import org.apache.helix.manager.zk.ZkAsyncCallbacks.SetDataCallbackHandler;
 import org.apache.log4j.Logger;
 import org.apache.zookeeper.CreateMode;
-import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.ZooDefs.Ids;
 import org.apache.zookeeper.data.Stat;
 
@@ -62,8 +61,7 @@ public class ZkClient extends org.I0Itec.zkclient.ZkClient {
     _zkSerializer = zkSerializer;
     if (LOG.isTraceEnabled()) {
       StackTraceElement[] calls = Thread.currentThread().getStackTrace();
-      int min = Math.min(calls.length, 5);
-      LOG.trace("creating a zkclient. callstack: " + Arrays.asList(calls).subList(0, min));
+      LOG.trace("creating a zkclient. callstack: " + Arrays.asList(calls));
     }
   }
 
@@ -122,10 +120,45 @@ public class ZkClient extends org.I0Itec.zkclient.ZkClient {
   public void close() throws ZkInterruptedException {
     if (LOG.isTraceEnabled()) {
       StackTraceElement[] calls = Thread.currentThread().getStackTrace();
-      int min = Math.min(calls.length, 5);
-      LOG.trace("closing a zkclient. callStack: " + Arrays.asList(calls).subList(0, min));
+      LOG.trace("closing a zkclient. callStack: " + Arrays.asList(calls));
     }
-    super.close();
+
+    getEventLock().lock();
+    try {
+      if (_connection == null) {
+        return;
+      }
+
+      LOG.info("Closing zkclient: " + ((ZkConnection) _connection).getZookeeper());
+      super.close();
+    } catch (ZkInterruptedException e) {
+      /**
+       * HELIX-264: calling ZkClient#close() in its own eventThread context will
+       * throw ZkInterruptedException and skip ZkConnection#close()
+       */
+      if (_connection != null) {
+        try {
+          /**
+           * ZkInterruptedException#construct() honors InterruptedException by calling
+           * Thread.currentThread().interrupt(); clear it first, so we can safely close the
+           * zk-connection
+           */
+          Thread.interrupted();
+          _connection.close();
+          _connection = null;
+
+          /**
+           * restore interrupted status of current thread
+           */
+          Thread.currentThread().interrupt();
+        } catch (InterruptedException e1) {
+          throw new ZkInterruptedException(e1);
+        }
+      }
+    } finally {
+      getEventLock().unlock();
+      LOG.info("Closed zkclient");
+    }
   }
 
   public Stat getStat(final String path) {
@@ -312,6 +345,10 @@ public class ZkClient extends org.I0Itec.zkclient.ZkClient {
 
   @Override
   public boolean delete(final String path) {
+    return this.delete(path, -1);
+  }
+
+  public boolean delete(final String path, final int version) {
     long startT = System.nanoTime();
     try {
       try {
@@ -319,7 +356,8 @@ public class ZkClient extends org.I0Itec.zkclient.ZkClient {
 
           @Override
           public Object call() throws Exception {
-            _connection.delete(path);
+            ZkConnection connection = (ZkConnection) _connection;
+            connection.getZookeeper().delete(path, version);
             return null;
           }
         });

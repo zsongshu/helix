@@ -19,19 +19,23 @@ package org.apache.helix.integration;
  * under the License.
  */
 
-import org.apache.helix.*;
+import java.util.Date;
+
+import org.apache.helix.PropertyKey;
+import org.apache.helix.TestHelper;
+import org.apache.helix.ZNRecord;
+import org.apache.helix.ZkTestHelper;
+import org.apache.helix.ZkUnitTestBase;
+import org.apache.helix.integration.manager.ClusterControllerManager;
+import org.apache.helix.integration.manager.MockParticipantManager;
 import org.apache.helix.manager.zk.ZKHelixAdmin;
 import org.apache.helix.manager.zk.ZKHelixDataAccessor;
 import org.apache.helix.manager.zk.ZkBaseDataAccessor;
-import org.apache.helix.mock.controller.ClusterController;
-import org.apache.helix.mock.participant.MockParticipant;
 import org.apache.helix.model.ExternalView;
 import org.apache.helix.model.LiveInstance;
 import org.apache.helix.tools.ClusterStateVerifier;
 import org.testng.Assert;
 import org.testng.annotations.Test;
-
-import java.util.Date;
 
 /**
  * Test clean external-view - if current-state is remove externally, controller should remove the
@@ -57,15 +61,16 @@ public class TestCleanupExternalView extends ZkUnitTestBase {
         2, // replicas
         "MasterSlave", true); // do rebalance
 
-    ClusterController controller = new ClusterController(clusterName, "controller_0", ZK_ADDR);
+    ClusterControllerManager controller =
+        new ClusterControllerManager(ZK_ADDR, clusterName, "controller_0");
     controller.syncStart();
 
     // start participants
-    MockParticipant[] participants = new MockParticipant[n];
+    MockParticipantManager[] participants = new MockParticipantManager[n];
     for (int i = 0; i < n; i++) {
       String instanceName = "localhost_" + (12918 + i);
 
-      participants[i] = new MockParticipant(clusterName, instanceName, ZK_ADDR, null);
+      participants[i] = new MockParticipantManager(ZK_ADDR, clusterName, instanceName);
       participants[i].syncStart();
     }
 
@@ -80,7 +85,7 @@ public class TestCleanupExternalView extends ZkUnitTestBase {
     admin.enableCluster(clusterName, false);
     // wait all pending zk-events being processed, otherwise remove current-state will cause
     // controller send O->S message
-    ZkTestHelper.tryWaitZkEventsCleaned(controller.getManager().getZkClient());
+    ZkTestHelper.tryWaitZkEventsCleaned(controller.getZkClient());
     // System.out.println("paused controller");
 
     // drop resource
@@ -94,11 +99,11 @@ public class TestCleanupExternalView extends ZkUnitTestBase {
 
     // System.out.println("remove current-state");
     LiveInstance liveInstance = accessor.getProperty(keyBuilder.liveInstance("localhost_12918"));
-    accessor.removeProperty(keyBuilder.currentState("localhost_12918", liveInstance.getSessionId(),
-        "TestDB0"));
+    accessor.removeProperty(keyBuilder.currentState("localhost_12918", liveInstance.getTypedSessionId()
+        .stringify(), "TestDB0"));
     liveInstance = accessor.getProperty(keyBuilder.liveInstance("localhost_12919"));
-    accessor.removeProperty(keyBuilder.currentState("localhost_12919", liveInstance.getSessionId(),
-        "TestDB0"));
+    accessor.removeProperty(keyBuilder.currentState("localhost_12919", liveInstance.getTypedSessionId()
+        .stringify(), "TestDB0"));
 
     // re-enable controller shall remove orphan external-view
     // System.out.println("re-enabling controller");
@@ -117,8 +122,13 @@ public class TestCleanupExternalView extends ZkUnitTestBase {
     Assert.assertNull(externalView, "external-view for TestDB0 should be removed, but was: "
         + externalView);
 
-    System.out.println("END " + clusterName + " at " + new Date(System.currentTimeMillis()));
+    // clean up
+    controller.syncStop();
+    for (int i = 0; i < n; i++) {
+      participants[i].syncStop();
+    }
 
+    System.out.println("END " + clusterName + " at " + new Date(System.currentTimeMillis()));
   }
 
 }

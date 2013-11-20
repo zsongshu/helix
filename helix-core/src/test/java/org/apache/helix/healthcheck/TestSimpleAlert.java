@@ -26,21 +26,18 @@ import java.util.Set;
 import org.apache.helix.HelixDataAccessor;
 import org.apache.helix.HelixManager;
 import org.apache.helix.NotificationContext;
+import org.apache.helix.PropertyKey.Builder;
 import org.apache.helix.TestHelper;
 import org.apache.helix.ZNRecord;
-import org.apache.helix.PropertyKey.Builder;
-import org.apache.helix.TestHelper.StartCMResult;
 import org.apache.helix.alerts.AlertValueAndStatus;
-import org.apache.helix.controller.HelixControllerMain;
-import org.apache.helix.healthcheck.HealthStatsAggregationTask;
+import org.apache.helix.api.State;
 import org.apache.helix.healthcheck.ParticipantHealthReportCollectorImpl;
 import org.apache.helix.integration.ZkIntegrationTestBase;
+import org.apache.helix.integration.manager.ClusterControllerManager;
+import org.apache.helix.integration.manager.MockParticipantManager;
 import org.apache.helix.manager.zk.ZKHelixDataAccessor;
-import org.apache.helix.manager.zk.ZNRecordSerializer;
 import org.apache.helix.manager.zk.ZkBaseDataAccessor;
-import org.apache.helix.manager.zk.ZkClient;
 import org.apache.helix.mock.participant.MockEspressoHealthReportProvider;
-import org.apache.helix.mock.participant.MockParticipant;
 import org.apache.helix.mock.participant.MockTransition;
 import org.apache.helix.model.Message;
 import org.apache.helix.tools.ClusterSetup;
@@ -51,7 +48,6 @@ import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
 public class TestSimpleAlert extends ZkIntegrationTestBase {
-  ZkClient _zkClient;
   protected ClusterSetup _setupTool = null;
   protected final String _alertStr =
       "EXP(decay(1.0)(localhost_12918.RestQueryStats@DBName=TestDB0.latency))CMP(GREATER)CON(10)";
@@ -60,15 +56,11 @@ public class TestSimpleAlert extends ZkIntegrationTestBase {
 
   @BeforeClass()
   public void beforeClass() throws Exception {
-    _zkClient = new ZkClient(ZK_ADDR);
-    _zkClient.setZkSerializer(new ZNRecordSerializer());
-
-    _setupTool = new ClusterSetup(ZK_ADDR);
+    _setupTool = new ClusterSetup(_gZkClient);
   }
 
   @AfterClass
   public void afterClass() {
-    _zkClient.close();
   }
 
   public class SimpleAlertTransition extends MockTransition {
@@ -82,12 +74,12 @@ public class TestSimpleAlert extends ZkIntegrationTestBase {
     public void doTransition(Message message, NotificationContext context) {
       HelixManager manager = context.getManager();
       HelixDataAccessor accessor = manager.getHelixDataAccessor();
-      String fromState = message.getFromState();
-      String toState = message.getToState();
+      State fromState = message.getTypedFromState();
+      State toState = message.getTypedToState();
       String instance = message.getTgtName();
-      String partition = message.getPartitionName();
 
-      if (fromState.equalsIgnoreCase("SLAVE") && toState.equalsIgnoreCase("MASTER")) {
+      if (fromState.toString().equalsIgnoreCase("SLAVE")
+          && toState.toString().equalsIgnoreCase("MASTER")) {
 
         // add a stat and report to ZK
         // perhaps should keep reporter per instance...
@@ -125,7 +117,7 @@ public class TestSimpleAlert extends ZkIntegrationTestBase {
   @Test()
   public void testSimpleAlert() throws Exception {
     String clusterName = getShortClassName();
-    MockParticipant[] participants = new MockParticipant[5];
+    MockParticipantManager[] participants = new MockParticipantManager[5];
 
     System.out.println("START TestSimpleAlert at " + new Date(System.currentTimeMillis()));
 
@@ -140,10 +132,11 @@ public class TestSimpleAlert extends ZkIntegrationTestBase {
 
     // enableHealthCheck(clusterName);
 
-    StartCMResult cmResult =
-        TestHelper.startController(clusterName, "controller_0", ZK_ADDR,
-            HelixControllerMain.STANDALONE);
-    cmResult._manager.startTimerTasks();
+    ClusterControllerManager controller =
+        new ClusterControllerManager(ZK_ADDR, clusterName, "controller_0");
+    controller.syncStart();
+    controller.startTimerTasks();
+
     _setupTool.getClusterManagementTool().addAlert(clusterName, _alertStr);
     // start participants
     for (int i = 0; i < 5; i++) // !!!change back to 5
@@ -151,9 +144,9 @@ public class TestSimpleAlert extends ZkIntegrationTestBase {
       String instanceName = "localhost_" + (12918 + i);
 
       participants[i] =
-          new MockParticipant(clusterName, instanceName, ZK_ADDR, new SimpleAlertTransition(15));
+          new MockParticipantManager(ZK_ADDR, clusterName, instanceName);
+      participants[i].setTransition(new SimpleAlertTransition(15));
       participants[i].syncStart();
-      // new Thread(participants[i]).start();
     }
 
     boolean result =
@@ -163,13 +156,14 @@ public class TestSimpleAlert extends ZkIntegrationTestBase {
 
     // HealthAggregationTask is supposed to run by a timer every 30s
     // To make sure HealthAggregationTask is run, we invoke it explicitly for this test
-    new HealthStatsAggregator(cmResult._manager).aggregate();
+    // new HealthStatsAggregator(cmResult._manager).aggregate();
+    new HealthStatsAggregator(controller).aggregate();
     // sleep for a few seconds to give stats stage time to trigger
     Thread.sleep(3000);
 
     // other verifications go here
     ZKHelixDataAccessor accessor =
-        new ZKHelixDataAccessor(clusterName, new ZkBaseDataAccessor(_zkClient));
+        new ZKHelixDataAccessor(clusterName, new ZkBaseDataAccessor<ZNRecord>(_gZkClient));
     Builder keyBuilder = accessor.keyBuilder();
     // for (int i = 0; i < 1; i++) //change 1 back to 5
     // {
@@ -197,6 +191,11 @@ public class TestSimpleAlert extends ZkIntegrationTestBase {
             .equals("ON"));
     // }
 
+    // clean up
+    controller.syncStop();
+    for (int i = 0; i < 5; i++) {
+      participants[i].syncStop();
+    }
     System.out.println("END TestSimpleAlert at " + new Date(System.currentTimeMillis()));
   }
 }

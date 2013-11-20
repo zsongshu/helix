@@ -22,7 +22,7 @@ under the License.
   <parent>
     <groupId>org.apache.helix</groupId>
     <artifactId>helix</artifactId>
-    <version>0.6.2-incubating-SNAPSHOT</version>
+    <version>0.7.1-incubating-SNAPSHOT</version>
   </parent>
   <artifactId>helix-agent</artifactId>
   <packaging>bundle</packaging>
@@ -44,8 +44,8 @@ under the License.
       <artifactId>helix-core</artifactId>
     </dependency>
     <dependency>
-      <groupId>com.noelios.restlet</groupId>
-      <artifactId>com.noelios.restlet</artifactId>
+      <groupId>org.restlet.jse</groupId>
+      <artifactId>org.restlet</artifactId>
     </dependency>
     <dependency>
       <groupId>org.testng</groupId>
@@ -78,6 +78,23 @@ under the License.
             </program>
           </programs>
         </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-assembly-plugin</artifactId>
+        <configuration>
+          <descriptors>
+            <descriptor>src/assemble/assembly.xml</descriptor>
+          </descriptors>
+        </configuration>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>single</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>

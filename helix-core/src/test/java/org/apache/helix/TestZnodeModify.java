@@ -25,17 +25,16 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.helix.ZNRecord;
 import org.apache.helix.manager.zk.ZNRecordSerializer;
 import org.apache.helix.manager.zk.ZkClient;
 import org.apache.helix.model.IdealState.IdealStateProperty;
 import org.apache.helix.model.IdealState.RebalanceMode;
 import org.apache.helix.tools.TestCommand;
+import org.apache.helix.tools.TestCommand.CommandType;
 import org.apache.helix.tools.TestExecutor;
+import org.apache.helix.tools.TestExecutor.ZnodePropertyType;
 import org.apache.helix.tools.TestTrigger;
 import org.apache.helix.tools.ZnodeOpArg;
-import org.apache.helix.tools.TestCommand.CommandType;
-import org.apache.helix.tools.TestExecutor.ZnodePropertyType;
 import org.apache.log4j.Logger;
 import org.testng.Assert;
 import org.testng.AssertJUnit;
@@ -216,8 +215,7 @@ public class TestZnodeModify extends ZkUnitTestBase {
           zkClient.createPersistent(pathChild1, true);
           zkClient.writeData(pathChild1, record);
         } catch (InterruptedException e) {
-          // TODO Auto-generated catch block
-          e.printStackTrace();
+          logger.error("Interrupted sleep", e);
         }
       }
     }.start();

@@ -26,17 +26,14 @@ import java.util.Map;
 import java.util.Set;
 
 import org.I0Itec.zkclient.IZkChildListener;
-import org.apache.helix.TestHelper;
-import org.apache.helix.ZNRecord;
 import org.apache.helix.HelixProperty.HelixPropertyAttribute;
 import org.apache.helix.PropertyKey.Builder;
-import org.apache.helix.ZkTestHelper;
-import org.apache.helix.controller.HelixControllerMain;
-import org.apache.helix.manager.zk.ZKHelixAdmin;
+import org.apache.helix.TestHelper;
+import org.apache.helix.ZNRecord;
 import org.apache.helix.manager.zk.ZKHelixDataAccessor;
 import org.apache.helix.manager.zk.ZkBaseDataAccessor;
-import org.apache.helix.mock.controller.ClusterController;
-import org.apache.helix.mock.participant.MockParticipant;
+import org.apache.helix.integration.manager.ClusterControllerManager;
+import org.apache.helix.integration.manager.MockParticipantManager;
 import org.apache.helix.mock.participant.ErrTransition;
 import org.apache.helix.model.IdealState;
 import org.apache.helix.model.LiveInstance;
@@ -91,15 +88,16 @@ public class TestBatchMessage extends ZkIntegrationTestBase {
     TestZkChildListener listener = new TestZkChildListener();
     _gZkClient.subscribeChildChanges(keyBuilder.messages("localhost_12918").getPath(), listener);
 
-    ClusterController controller = new ClusterController(clusterName, "controller_0", ZK_ADDR);
+    ClusterControllerManager controller =
+        new ClusterControllerManager(ZK_ADDR, clusterName, "controller_0");
     controller.syncStart();
 
     // start participants
-    MockParticipant[] participants = new MockParticipant[n];
+    MockParticipantManager[] participants = new MockParticipantManager[n];
     for (int i = 0; i < n; i++) {
       String instanceName = "localhost_" + (12918 + i);
 
-      participants[i] = new MockParticipant(clusterName, instanceName, ZK_ADDR, null);
+      participants[i] = new MockParticipantManager(ZK_ADDR, clusterName, instanceName);
       participants[i].syncStart();
     }
 
@@ -112,7 +110,6 @@ public class TestBatchMessage extends ZkIntegrationTestBase {
 
     // clean up
     // wait for all zk callbacks done
-    Thread.sleep(1000);
     controller.syncStop();
     for (int i = 0; i < n; i++) {
       participants[i].syncStop();
@@ -141,15 +138,16 @@ public class TestBatchMessage extends ZkIntegrationTestBase {
         2, // replicas
         "MasterSlave", true); // do rebalance
 
-    ClusterController controller = new ClusterController(clusterName, "controller_0", ZK_ADDR);
+    ClusterControllerManager controller =
+        new ClusterControllerManager(ZK_ADDR, clusterName, "controller_0");
     controller.syncStart();
 
     // start participants
-    MockParticipant[] participants = new MockParticipant[n];
+    MockParticipantManager[] participants = new MockParticipantManager[n];
     for (int i = 0; i < n; i++) {
       String instanceName = "localhost_" + (12918 + i);
 
-      participants[i] = new MockParticipant(clusterName, instanceName, ZK_ADDR, null);
+      participants[i] = new MockParticipantManager(ZK_ADDR, clusterName, instanceName);
       participants[i].syncStart();
     }
 
@@ -159,7 +157,6 @@ public class TestBatchMessage extends ZkIntegrationTestBase {
     Assert.assertTrue(result);
 
     // stop all participants
-    Thread.sleep(1000);
     for (int i = 0; i < n; i++) {
       participants[i].syncStop();
     }
@@ -180,7 +177,7 @@ public class TestBatchMessage extends ZkIntegrationTestBase {
     for (int i = 0; i < n; i++) {
       String instanceName = "localhost_" + (12918 + i);
 
-      participants[i] = new MockParticipant(clusterName, instanceName, ZK_ADDR, null);
+      participants[i] = new MockParticipantManager(ZK_ADDR, clusterName, instanceName);
       participants[i].syncStart();
     }
 
@@ -193,7 +190,6 @@ public class TestBatchMessage extends ZkIntegrationTestBase {
 
     // clean up
     // wait for all zk callbacks done
-    Thread.sleep(1000);
     controller.syncStop();
     for (int i = 0; i < n; i++) {
       participants[i].syncStop();
@@ -209,10 +205,9 @@ public class TestBatchMessage extends ZkIntegrationTestBase {
     String clusterName = className + "_" + methodName;
 
     final int n = 5;
-    MockParticipant[] participants = new MockParticipant[n];
+    MockParticipantManager[] participants = new MockParticipantManager[n];
 
     System.out.println("START " + clusterName + " at " + new Date(System.currentTimeMillis()));
-    // ZKHelixAdmin tool = new ZKHelixAdmin(_gZkClient);
 
     TestHelper.setupCluster(clusterName, ZK_ADDR, 12918, "localhost", "TestDB", 1, // resource#
         6, // partition#
@@ -228,33 +223,37 @@ public class TestBatchMessage extends ZkIntegrationTestBase {
     idealState.setBatchMessageMode(true);
     accessor.setProperty(keyBuilder.idealStates("TestDB0"), idealState);
 
-    TestHelper
-        .startController(clusterName, "controller_0", ZK_ADDR, HelixControllerMain.STANDALONE);
+    final String hostToFail = "localhost_12921";
+    final String partitionToFail = "TestDB0_4";
+
+    ClusterControllerManager controller =
+        new ClusterControllerManager(ZK_ADDR, clusterName, "controller_0");
+    controller.syncStart();
+
     for (int i = 0; i < n; i++) {
       String instanceName = "localhost_" + (12918 + i);
 
-      if (i == 1) {
+      if (instanceName.equals(hostToFail)) {
         Map<String, Set<String>> errPartitions = new HashMap<String, Set<String>>();
         errPartitions.put("SLAVE-MASTER", TestHelper.setOf("TestDB0_4"));
-        participants[i] =
-            new MockParticipant(clusterName, instanceName, ZK_ADDR,
-                new ErrTransition(errPartitions));
+        participants[i] = new MockParticipantManager(ZK_ADDR, clusterName, instanceName);
+        participants[i].setTransition(new ErrTransition(errPartitions));
       } else {
-        participants[i] = new MockParticipant(clusterName, instanceName, ZK_ADDR);
+        participants[i] = new MockParticipantManager(ZK_ADDR, clusterName, instanceName);
       }
       participants[i].syncStart();
     }
 
     Map<String, Map<String, String>> errStates = new HashMap<String, Map<String, String>>();
     errStates.put("TestDB0", new HashMap<String, String>());
-    errStates.get("TestDB0").put("TestDB0_4", "localhost_12919");
+    errStates.get("TestDB0").put(partitionToFail, hostToFail);
     boolean result =
         ClusterStateVerifier.verifyByPolling(new ClusterStateVerifier.BestPossAndExtViewZkVerifier(
             ZK_ADDR, clusterName, errStates));
     Assert.assertTrue(result);
 
     Map<String, Set<String>> errorStateMap = new HashMap<String, Set<String>>();
-    errorStateMap.put("TestDB0_4", TestHelper.setOf("localhost_12919"));
+    errorStateMap.put(partitionToFail, TestHelper.setOf(hostToFail));
 
     // verify "TestDB0_4", "localhost_12919" is in ERROR state
     TestHelper.verifyState(clusterName, ZK_ADDR, errorStateMap, "ERROR");
@@ -297,7 +296,8 @@ public class TestBatchMessage extends ZkIntegrationTestBase {
     TestZkChildListener listener = new TestZkChildListener();
     _gZkClient.subscribeChildChanges(keyBuilder.messages("localhost_12918").getPath(), listener);
 
-    ClusterController controller = new ClusterController(clusterName, "controller_0", ZK_ADDR);
+    ClusterControllerManager controller =
+        new ClusterControllerManager(ZK_ADDR, clusterName, "controller_0");
     controller.syncStart();
 
     // pause controller
@@ -307,11 +307,11 @@ public class TestBatchMessage extends ZkIntegrationTestBase {
     });
 
     // start participants
-    MockParticipant[] participants = new MockParticipant[n];
+    MockParticipantManager[] participants = new MockParticipantManager[n];
     for (int i = 0; i < n; i++) {
       String instanceName = "localhost_" + (12918 + i);
 
-      participants[i] = new MockParticipant(clusterName, instanceName, ZK_ADDR, null);
+      participants[i] = new MockParticipantManager(ZK_ADDR, clusterName, instanceName);
       participants[i].syncStart();
     }
 
@@ -335,7 +335,6 @@ public class TestBatchMessage extends ZkIntegrationTestBase {
 
     // clean up
     // wait for all zk callbacks done
-    Thread.sleep(1000);
     controller.syncStop();
     for (int i = 0; i < n; i++) {
       participants[i].syncStop();

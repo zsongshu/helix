@@ -31,6 +31,8 @@ import org.apache.helix.HelixException;
 import org.apache.helix.InstanceType;
 import org.apache.helix.PropertyPathConfig;
 import org.apache.helix.PropertyType;
+import org.apache.helix.api.id.MessageId;
+import org.apache.helix.api.id.SessionId;
 import org.apache.helix.manager.zk.DefaultSchedulerMessageHandlerFactory;
 import org.apache.helix.manager.zk.ZkClient;
 import org.apache.helix.model.LiveInstance;
@@ -41,55 +43,32 @@ import org.apache.helix.webapp.RestAdminApplication;
 import org.apache.log4j.Logger;
 import org.codehaus.jackson.JsonGenerationException;
 import org.codehaus.jackson.map.JsonMappingException;
-import org.restlet.Context;
 import org.restlet.data.Form;
 import org.restlet.data.MediaType;
-import org.restlet.data.Request;
-import org.restlet.data.Response;
 import org.restlet.data.Status;
-import org.restlet.resource.Representation;
-import org.restlet.resource.Resource;
-import org.restlet.resource.StringRepresentation;
-import org.restlet.resource.Variant;
+import org.restlet.representation.Representation;
+import org.restlet.representation.StringRepresentation;
+import org.restlet.representation.Variant;
+import org.restlet.resource.ServerResource;
 
 /**
  * This resource can be used to send scheduler tasks to the controller.
  */
-public class SchedulerTasksResource extends Resource {
+public class SchedulerTasksResource extends ServerResource {
   private final static Logger LOG = Logger.getLogger(SchedulerTasksResource.class);
 
   public static String CRITERIA = "Criteria";
   public static String MESSAGETEMPLATE = "MessageTemplate";
   public static String TASKQUEUENAME = "TaskQueueName";
 
-  public SchedulerTasksResource(Context context, Request request, Response response) {
-    super(context, request, response);
+  public SchedulerTasksResource() {
     getVariants().add(new Variant(MediaType.TEXT_PLAIN));
     getVariants().add(new Variant(MediaType.APPLICATION_JSON));
+    setNegotiated(false);
   }
 
   @Override
-  public boolean allowGet() {
-    return true;
-  }
-
-  @Override
-  public boolean allowPost() {
-    return true;
-  }
-
-  @Override
-  public boolean allowPut() {
-    return false;
-  }
-
-  @Override
-  public boolean allowDelete() {
-    return false;
-  }
-
-  @Override
-  public Representation represent(Variant variant) {
+  public Representation get() {
     StringRepresentation presentation = null;
     try {
       presentation = getSchedulerTasksRepresentation();
@@ -117,7 +96,6 @@ public class SchedulerTasksResource extends Resource {
         ClusterRepresentationUtil.getClusterDataAccessor(zkClient, clusterName);
     LiveInstance liveInstance =
         accessor.getProperty(accessor.keyBuilder().liveInstance(instanceName));
-    String sessionId = liveInstance.getSessionId();
 
     StringRepresentation representation = new StringRepresentation("");// (ClusterRepresentationUtil.ObjectToJson(instanceConfigs),
                                                                        // MediaType.APPLICATION_JSON);
@@ -126,7 +104,7 @@ public class SchedulerTasksResource extends Resource {
   }
 
   @Override
-  public void acceptRepresentation(Representation entity) {
+  public Representation post(Representation entity) {
     try {
       String clusterName = (String) getRequest().getAttributes().get("clusterName");
       Form form = new Form(entity);
@@ -153,12 +131,12 @@ public class SchedulerTasksResource extends Resource {
       }
 
       Message schedulerMessage =
-          new Message(MessageType.SCHEDULER_MSG, UUID.randomUUID().toString());
+          new Message(MessageType.SCHEDULER_MSG, MessageId.from(UUID.randomUUID().toString()));
       schedulerMessage.getRecord().getSimpleFields().put(CRITERIA, criteriaString);
 
       schedulerMessage.getRecord().getMapFields().put(MESSAGETEMPLATE, messageTemplate);
 
-      schedulerMessage.setTgtSessionId(leader.getSessionId());
+      schedulerMessage.setTgtSessionId(SessionId.from(leader.getTypedSessionId().stringify()));
       schedulerMessage.setTgtName("CONTROLLER");
       schedulerMessage.setSrcInstanceType(InstanceType.CONTROLLER);
       String taskQueueName =
@@ -167,22 +145,23 @@ public class SchedulerTasksResource extends Resource {
         schedulerMessage.getRecord().setSimpleField(
             DefaultSchedulerMessageHandlerFactory.SCHEDULER_TASK_QUEUE, taskQueueName);
       }
-      accessor.setProperty(accessor.keyBuilder().controllerMessage(schedulerMessage.getMsgId()),
+      accessor.setProperty(
+          accessor.keyBuilder().controllerMessage(schedulerMessage.getMessageId().stringify()),
           schedulerMessage);
 
       Map<String, String> resultMap = new HashMap<String, String>();
       resultMap.put("StatusUpdatePath", PropertyPathConfig.getPath(
           PropertyType.STATUSUPDATES_CONTROLLER, clusterName, MessageType.SCHEDULER_MSG.toString(),
-          schedulerMessage.getMsgId()));
+          schedulerMessage.getMessageId().stringify()));
       resultMap.put("MessageType", Message.MessageType.SCHEDULER_MSG.toString());
-      resultMap.put("MsgId", schedulerMessage.getMsgId());
+      resultMap.put("MsgId", schedulerMessage.getMessageId().stringify());
 
       // Assemble the rest URL for task status update
       String ipAddress = InetAddress.getLocalHost().getCanonicalHostName();
       String url =
           "http://" + ipAddress + ":" + getContext().getAttributes().get(RestAdminApplication.PORT)
               + "/clusters/" + clusterName + "/Controller/statusUpdates/SCHEDULER_MSG/"
-              + schedulerMessage.getMsgId();
+              + schedulerMessage.getMessageId();
       resultMap.put("statusUpdateUrl", url);
 
       getResponse().setEntity(ClusterRepresentationUtil.ObjectToJson(resultMap),
@@ -194,5 +173,6 @@ public class SchedulerTasksResource extends Resource {
       getResponse().setStatus(Status.SUCCESS_OK);
       LOG.error("", e);
     }
+    return null;
   }
 }
