@@ -10,15 +10,17 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.apache.helix.HelixManager;
+import org.apache.helix.api.Cluster;
+import org.apache.helix.api.State;
+import org.apache.helix.api.id.ParticipantId;
+import org.apache.helix.api.id.PartitionId;
+import org.apache.helix.api.id.ResourceId;
 import org.apache.helix.autoscale.StatusProvider;
 import org.apache.helix.autoscale.TargetProvider;
-import org.apache.helix.controller.rebalancer.Rebalancer;
-import org.apache.helix.controller.stages.ClusterDataCache;
-import org.apache.helix.controller.stages.CurrentStateOutput;
-import org.apache.helix.model.IdealState;
-import org.apache.helix.model.LiveInstance;
-import org.apache.helix.model.Partition;
-import org.apache.helix.model.Resource;
+import org.apache.helix.controller.rebalancer.HelixRebalancer;
+import org.apache.helix.controller.rebalancer.context.PartitionedRebalancerContext;
+import org.apache.helix.controller.rebalancer.context.RebalancerConfig;
+import org.apache.helix.controller.stages.ResourceCurrentState;
 import org.apache.helix.model.ResourceAssignment;
 import org.apache.log4j.Logger;
 
@@ -40,7 +42,7 @@ import com.google.common.collect.Sets;
  * instance = container provider<br/>
  * status = physical container instance presence<br/>
  */
-public class ProviderRebalancer implements Rebalancer {
+public class ProviderRebalancer implements HelixRebalancer {
 
     static final Logger log                 = Logger.getLogger(ProviderRebalancer.class);
 
@@ -61,17 +63,21 @@ public class ProviderRebalancer implements Rebalancer {
     }
 
     @Override
-    public ResourceAssignment computeResourceMapping(String resourceName, IdealState idealState, CurrentStateOutput currentStateOutput,
-            ClusterDataCache clusterData) {
-
+    public ResourceAssignment computeResourceMapping(RebalancerConfig rebalancerConfig,
+        Cluster cluster, ResourceCurrentState currentStateOutput) {
+      PartitionedRebalancerContext context = rebalancerConfig.getRebalancerContext(PartitionedRebalancerContext.class);
+      ResourceId resourceId = context.getResourceId();
+      String resourceName = resourceId.toString();
         final String containerType = resourceName;
 
         final SortedSet<String> allContainers = Sets.newTreeSet(new IndexedNameComparator());
-        allContainers.addAll(idealState.getPartitionSet());
+        for (PartitionId partitionId : context.getPartitionSet()) {
+          allContainers.add(partitionId.toString());
+        }
 
         final SortedSet<String> allProviders = Sets.newTreeSet(new IndexedNameComparator());
-        for (LiveInstance instance : clusterData.getLiveInstances().values()) {
-            allProviders.add(instance.getId());
+        for (ParticipantId instance : cluster.getLiveParticipantMap().keySet()) {
+            allProviders.add(instance.toString());
         }
 
         final ResourceState currentState = new ResourceState(resourceName, currentStateOutput);
@@ -83,13 +89,13 @@ public class ProviderRebalancer implements Rebalancer {
             targetCount = targetProvider.getTargetContainerCount(containerType);
         } catch (Exception e) {
             log.error(String.format("Could not retrieve target count for '%s'", containerType), e);
-            return new ResourceAssignment(resourceName);
+            return new ResourceAssignment(resourceId);
         }
 
         // provider sanity check
         if (allProviders.isEmpty()) {
             log.warn(String.format("Could not find any providers"));
-            return new ResourceAssignment(resourceName);
+            return new ResourceAssignment(resourceId);
         }
 
         // all containers
@@ -107,25 +113,25 @@ public class ProviderRebalancer implements Rebalancer {
         // assignment
         int maxCountPerProvider = (int) Math.ceil(targetCount / (float) allProviders.size());
 
-        ResourceAssignment assignment = new ResourceAssignment(resourceName);
+        ResourceAssignment assignment = new ResourceAssignment(resourceId);
         CountMap counts = new CountMap(allProviders);
         int assignmentCount = 0;
 
         // currently assigned
         for (String containerName : assignedContainers) {
             String providerName = getProvider(currentState, containerName);
-            Partition partition = new Partition(containerName);
+            PartitionId partition = PartitionId.from(containerName);
 
             if (failedContainers.contains(containerName)) {
                 log.warn(String.format("Container '%s:%s' failed, going offline", providerName, containerName));
-                assignment.addReplicaMap(partition, Collections.singletonMap(providerName, "OFFLINE"));
+                assignment.addReplicaMap(partition, Collections.singletonMap(ParticipantId.from(providerName), State.from("OFFLINE")));
 
             } else if (counts.get(providerName) >= maxCountPerProvider) {
                 log.warn(String.format("Container '%s:%s' misassigned, going offline", providerName, containerName));
-                assignment.addReplicaMap(partition, Collections.singletonMap(providerName, "OFFLINE"));
+                assignment.addReplicaMap(partition, Collections.singletonMap(ParticipantId.from(providerName), State.from("OFFLINE")));
 
             } else {
-                assignment.addReplicaMap(partition, Collections.singletonMap(providerName, "ONLINE"));
+                assignment.addReplicaMap(partition, Collections.singletonMap(ParticipantId.from(providerName), State.from("ONLINE")));
             }
 
             counts.increment(providerName);
@@ -142,14 +148,14 @@ public class ProviderRebalancer implements Rebalancer {
                 break;
 
             String providerName = counts.getMinKey();
-            Partition partition = new Partition(containerName);
+            PartitionId partition = PartitionId.from(containerName);
 
             if (failedContainers.contains(containerName)) {
                 log.warn(String.format("Container '%s:%s' failed and unassigned, going offline", providerName, containerName));
-                assignment.addReplicaMap(partition, Collections.singletonMap(providerName, "OFFLINE"));
+                assignment.addReplicaMap(partition, Collections.singletonMap(ParticipantId.from(providerName), State.from("OFFLINE")));
 
             } else {
-                assignment.addReplicaMap(partition, Collections.singletonMap(providerName, "ONLINE"));
+                assignment.addReplicaMap(partition, Collections.singletonMap(ParticipantId.from(providerName), State.from("ONLINE")));
             }
 
             counts.increment(providerName);
@@ -165,32 +171,32 @@ public class ProviderRebalancer implements Rebalancer {
     }
 
     boolean hasProvider(ResourceState state, String containerName) {
-        Map<String, String> currentStateMap = state.getCurrentStateMap(containerName);
-        Map<String, String> pendingStateMap = state.getPendingStateMap(containerName);
-        return hasInstance(currentStateMap, "ONLINE") || hasInstance(pendingStateMap, "ONLINE");
+        Map<ParticipantId, State> currentStateMap = state.getCurrentStateMap(containerName);
+        Map<ParticipantId, State> pendingStateMap = state.getPendingStateMap(containerName);
+        return hasInstance(currentStateMap, State.from("ONLINE")) || hasInstance(pendingStateMap, State.from("ONLINE"));
     }
 
     String getProvider(ResourceState state, String containerName) {
-        Map<String, String> currentStateMap = state.getCurrentStateMap(containerName);
-        if (hasInstance(currentStateMap, "ONLINE"))
-            return getInstance(currentStateMap, "ONLINE");
+        Map<ParticipantId, State> currentStateMap = state.getCurrentStateMap(containerName);
+        if (hasInstance(currentStateMap, State.from("ONLINE")))
+            return getInstance(currentStateMap, State.from("ONLINE")).toString();
 
-        Map<String, String> pendingStateMap = state.getPendingStateMap(containerName);
-        return getInstance(pendingStateMap, "ONLINE");
+        Map<ParticipantId, State> pendingStateMap = state.getPendingStateMap(containerName);
+        return getInstance(pendingStateMap, State.from("ONLINE")).toString();
     }
 
     SortedSet<String> getFailedContainers(ResourceState state, Collection<String> containers) {
         SortedSet<String> failedContainers = Sets.newTreeSet(new IndexedNameComparator());
         for (String containerName : containers) {
-            Map<String, String> currentStateMap = state.getCurrentStateMap(containerName);
-            Map<String, String> pendingStateMap = state.getPendingStateMap(containerName);
+            Map<ParticipantId, State> currentStateMap = state.getCurrentStateMap(containerName);
+            Map<ParticipantId, State> pendingStateMap = state.getPendingStateMap(containerName);
 
-            if (hasInstance(currentStateMap, "ERROR")) {
+            if (hasInstance(currentStateMap, State.from("ERROR"))) {
                 failedContainers.add(containerName);
                 continue;
             }
 
-            if (!hasInstance(currentStateMap, "ONLINE") || hasInstance(pendingStateMap, "OFFLINE"))
+            if (!hasInstance(currentStateMap, State.from("ONLINE")) || hasInstance(pendingStateMap, State.from("OFFLINE")))
                 continue;
 
             // container listed online and not in transition, but not active
@@ -214,9 +220,9 @@ public class ProviderRebalancer implements Rebalancer {
         return assignedContainers;
     }
 
-    boolean hasInstance(Map<String, String> stateMap, String state) {
+    boolean hasInstance(Map<ParticipantId, State> stateMap, State state) {
         if (!stateMap.isEmpty()) {
-            for (Map.Entry<String, String> entry : stateMap.entrySet()) {
+            for (Map.Entry<ParticipantId, State> entry : stateMap.entrySet()) {
                 if (entry.getValue().equals(state)) {
                     return true;
                 }
@@ -225,9 +231,9 @@ public class ProviderRebalancer implements Rebalancer {
         return false;
     }
 
-    String getInstance(Map<String, String> stateMap, String state) {
+    ParticipantId getInstance(Map<ParticipantId, State> stateMap, State state) {
         if (!stateMap.isEmpty()) {
-            for (Map.Entry<String, String> entry : stateMap.entrySet()) {
+            for (Map.Entry<ParticipantId, State> entry : stateMap.entrySet()) {
                 if (entry.getValue().equals(state)) {
                     return entry.getKey();
                 }
@@ -332,20 +338,20 @@ public class ProviderRebalancer implements Rebalancer {
     }
 
     class ResourceState {
-        final String             resourceName;
-        final CurrentStateOutput state;
+        final ResourceId             resourceId;
+        final ResourceCurrentState state;
 
-        public ResourceState(String resourceName, CurrentStateOutput state) {
-            this.resourceName = resourceName;
+        public ResourceState(String resourceName, ResourceCurrentState state) {
+            this.resourceId = ResourceId.from(resourceName);
             this.state = state;
         }
 
-        Map<String, String> getCurrentStateMap(String partitionName) {
-            return state.getCurrentStateMap(resourceName, new Partition(partitionName));
+        Map<ParticipantId, State> getCurrentStateMap(String partitionName) {
+            return state.getCurrentStateMap(resourceId, PartitionId.from(partitionName));
         }
 
-        Map<String, String> getPendingStateMap(String partitionName) {
-            return state.getPendingStateMap(resourceName, new Partition(partitionName));
+        Map<ParticipantId, State> getPendingStateMap(String partitionName) {
+            return state.getPendingStateMap(resourceId, PartitionId.from(partitionName));
         }
     }
 }

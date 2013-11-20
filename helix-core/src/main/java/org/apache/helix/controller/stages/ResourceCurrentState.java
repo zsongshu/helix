@@ -47,6 +47,13 @@ public class ResourceCurrentState {
   private final Map<ResourceId, Map<PartitionId, Map<ParticipantId, State>>> _pendingStateMap;
 
   /**
+   * map of resource-id to map of partition-id to map of participant-id to state
+   * represent requested messages for the participant
+   * TODO: this isn't populated
+   */
+  private final Map<ResourceId, Map<PartitionId, Map<ParticipantId, State>>> _requestedStateMap;
+
+  /**
    * map of resource-id to state model definition id
    */
   private final Map<ResourceId, StateModelDefId> _resourceStateModelMap;
@@ -62,6 +69,7 @@ public class ResourceCurrentState {
   public ResourceCurrentState() {
     _currentStateMap = new HashMap<ResourceId, Map<PartitionId, Map<ParticipantId, State>>>();
     _pendingStateMap = new HashMap<ResourceId, Map<PartitionId, Map<ParticipantId, State>>>();
+    _requestedStateMap = new HashMap<ResourceId, Map<PartitionId, Map<ParticipantId, State>>>();
     _resourceStateModelMap = new HashMap<ResourceId, StateModelDefId>();
     _curStateMetaMap = new HashMap<ResourceId, CurrentState>();
 
@@ -222,6 +230,18 @@ public class ResourceCurrentState {
   public State getPendingState(ResourceId resourceId, PartitionId partitionId,
       ParticipantId participantId) {
     return getState(_pendingStateMap, resourceId, partitionId, participantId);
+  }
+
+  /**
+   * given (resource, partition, instance), returns toState
+   * @param resourceName
+   * @param partition
+   * @param instanceName
+   * @return
+   */
+  public State getRequestedState(ResourceId resourceId, PartitionId partitionId,
+      ParticipantId participantId) {
+    return getState(_requestedStateMap, resourceId, partitionId, participantId);
   }
 
   /**

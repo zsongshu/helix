@@ -6,6 +6,7 @@ import java.util.Properties;
 import org.apache.helix.HelixManager;
 import org.apache.helix.HelixManagerFactory;
 import org.apache.helix.InstanceType;
+import org.apache.helix.autoscale.TestUtils;
 import org.apache.helix.autoscale.impl.yarn.YarnContainerProviderProcess;
 import org.apache.helix.autoscale.impl.yarn.YarnStatusProvider;
 import org.apache.helix.integration.task.WorkflowGenerator;
