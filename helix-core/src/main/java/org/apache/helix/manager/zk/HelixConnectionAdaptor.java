@@ -51,6 +51,7 @@ import org.apache.helix.api.id.ParticipantId;
 import org.apache.helix.api.id.SessionId;
 import org.apache.helix.healthcheck.ParticipantHealthReportCollector;
 import org.apache.helix.model.HelixConfigScope.ConfigScopeProperty;
+import org.apache.helix.monitoring.MonitoringServer;
 import org.apache.helix.participant.StateMachineEngine;
 import org.apache.helix.store.zk.ZkHelixPropertyStore;
 import org.apache.log4j.Logger;
@@ -235,8 +236,7 @@ public class HelixConnectionAdaptor implements HelixManager {
       engine = autoController.getStateMachineEngine();
       break;
     default:
-      LOG.info("helix manager type: " + _role.getType()
-          + " does NOT have state-machine-engine");
+      LOG.error("Helix role: " + _role.getType() + " does NOT have state-machine engine");
       break;
     }
 
@@ -256,7 +256,7 @@ public class HelixConnectionAdaptor implements HelixManager {
       isLeader = autoController.isLeader();
       break;
     default:
-      LOG.info("helix manager type: " + _role.getType() + " does NOT support leadership");
+      LOG.error("Helix role: " + _role.getType() + " does NOT support leadership");
       break;
     }
     return isLeader;
@@ -286,8 +286,8 @@ public class HelixConnectionAdaptor implements HelixManager {
       autoController.addPreConnectCallback(callback);
       break;
     default:
-      LOG.info("helix manager type: " + _role.getType()
-          + " does NOT support add pre-connect callback");
+      LOG.error("Helix role: " + _role.getType()
+          + " does NOT support adding a pre-connect callback");
       break;
     }
   }
@@ -304,16 +304,51 @@ public class HelixConnectionAdaptor implements HelixManager {
       autoController.setLiveInstanceInfoProvider(liveInstanceInfoProvider);
       break;
     default:
-      LOG.info("helix manager type: " + _role.getType()
-          + " does NOT support set additional live instance information");
+      LOG.error("Helix role: " + _role.getType()
+          + " does NOT support setting additional live instance information");
       break;
     }
   }
 
   @Override
   public void addControllerMessageListener(MessageListener listener) {
-    // TODO Auto-generated method stub
+    _connection.addControllerMessageListener(_role, listener, _clusterId);
+  }
 
+  @Override
+  public void registerMonitoringServer(MonitoringServer monitoringServer) {
+    switch (_role.getType()) {
+    case CONTROLLER:
+      HelixController controller = (HelixController) _role;
+      controller.registerMonitoringServer(monitoringServer);
+      break;
+    case CONTROLLER_PARTICIPANT:
+      HelixAutoController autoController = (HelixAutoController) _role;
+      autoController.registerMonitoringServer(monitoringServer);
+      break;
+    default:
+      LOG.error("A non-controller cannot own a monitoring server!");
+      break;
+    }
+  }
+
+  @Override
+  public MonitoringServer getMonitoringServer() {
+    MonitoringServer server = null;
+    switch (_role.getType()) {
+    case CONTROLLER:
+      HelixController controller = (HelixController) _role;
+      server = controller.getMonitoringServer();
+      break;
+    case CONTROLLER_PARTICIPANT:
+      HelixAutoController autoController = (HelixAutoController) _role;
+      server = autoController.getMonitoringServer();
+      break;
+    default:
+      LOG.error("Cannot get a monitoring server for a non-controller (" + _role.getType() + ")!");
+      break;
+    }
+    return server;
   }
 
 }

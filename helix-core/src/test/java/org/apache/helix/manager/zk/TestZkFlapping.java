@@ -34,6 +34,7 @@ import org.apache.helix.ZkTestHelper;
 import org.apache.helix.ZkUnitTestBase;
 import org.apache.helix.integration.manager.ClusterControllerManager;
 import org.apache.helix.integration.manager.MockParticipantManager;
+import org.apache.helix.model.Leader;
 import org.apache.helix.model.LiveInstance;
 import org.apache.zookeeper.Watcher.Event.KeeperState;
 import org.testng.Assert;
@@ -282,7 +283,7 @@ public class TestZkFlapping extends ZkUnitTestBase {
 
       @Override
       public boolean verify() throws Exception {
-        LiveInstance leader = accessor.getProperty(keyBuilder.controllerLeader());
+        Leader leader = accessor.getProperty(keyBuilder.controllerLeader());
         return leader == null;
       }
     }, 5 * 1000);

@@ -22,8 +22,6 @@ package org.apache.helix.manager.zk;
 import java.lang.management.ManagementFactory;
 
 import org.apache.helix.ControllerChangeListener;
-import org.apache.helix.HelixConnection;
-import org.apache.helix.HelixController;
 import org.apache.helix.HelixDataAccessor;
 import org.apache.helix.HelixManager;
 import org.apache.helix.InstanceType;
@@ -34,8 +32,9 @@ import org.apache.helix.api.id.ClusterId;
 import org.apache.helix.api.id.ControllerId;
 import org.apache.helix.controller.GenericHelixController;
 import org.apache.helix.controller.restlet.ZKPropertyTransferServer;
+import org.apache.helix.model.Leader;
 import org.apache.helix.model.LeaderHistory;
-import org.apache.helix.model.LiveInstance;
+import org.apache.helix.monitoring.MonitoringServer;
 import org.apache.log4j.Logger;
 
 // TODO GenericHelixController has a controller-listener, we can invoke leader-election from there
@@ -84,7 +83,6 @@ public class ZkHelixLeaderElection implements ControllerChangeListener {
           || changeContext.getType().equals(NotificationContext.Type.CALLBACK)) {
         LOG.info(_controllerId + " is trying to acquire leadership for cluster: " + _clusterId);
 
-
         while (accessor.getProperty(keyBuilder.controllerLeader()) == null) {
           boolean success = tryUpdateController(_manager);
           if (success) {
@@ -123,10 +121,31 @@ public class ZkHelixLeaderElection implements ControllerChangeListener {
   }
 
   private boolean tryUpdateController(HelixManager manager) {
+    return tryBecomingLeader(manager);
+  }
+
+  private void updateHistory(HelixManager manager) {
     HelixDataAccessor accessor = manager.getHelixDataAccessor();
     PropertyKey.Builder keyBuilder = accessor.keyBuilder();
 
-    LiveInstance leader = new LiveInstance(manager.getInstanceName());
+    LeaderHistory history = accessor.getProperty(keyBuilder.controllerLeaderHistory());
+    if (history == null) {
+      history = new LeaderHistory(PropertyType.HISTORY.toString());
+    }
+    history.updateHistory(manager.getClusterName(), manager.getInstanceName());
+    accessor.setProperty(keyBuilder.controllerLeaderHistory(), history);
+  }
+
+  /**
+   * Try to make this controller the leader
+   * @param manager HelixManager connection for the controller
+   * @return true if the controller is the leader, false otherwise
+   */
+  public static boolean tryBecomingLeader(HelixManager manager) {
+    HelixDataAccessor accessor = manager.getHelixDataAccessor();
+    PropertyKey.Builder keyBuilder = accessor.keyBuilder();
+
+    Leader leader = new Leader(ControllerId.from(manager.getInstanceName()));
     try {
       leader.setLiveInstance(ManagementFactory.getRuntimeMXBean().getName());
       leader.setSessionId(manager.getSessionId());
@@ -138,13 +157,18 @@ public class ZkHelixLeaderElection implements ControllerChangeListener {
           leader.setWebserviceUrl(zkPropertyTransferServiceUrl);
         }
       } else {
-        LOG.warn("ZKPropertyTransferServer instnace is null");
+        LOG.warn("ZKPropertyTransferServer instance is null");
+      }
+      MonitoringServer server = manager.getMonitoringServer();
+      if (server != null) {
+        leader.setMonitoringHost(server.getHost());
+        leader.setMonitoringPort(server.getPort());
       }
       boolean success = accessor.createProperty(keyBuilder.controllerLeader(), leader);
       if (success) {
         return true;
       } else {
-        LOG.info("Unable to become leader probably because some other controller becames the leader");
+        LOG.info("Unable to become leader probably because some other controller became the leader");
       }
     } catch (Exception e) {
       LOG.error(
@@ -163,17 +187,5 @@ public class ZkHelixLeaderElection implements ControllerChangeListener {
       }
     }
     return false;
-  }
-
-  private void updateHistory(HelixManager manager) {
-    HelixDataAccessor accessor = manager.getHelixDataAccessor();
-    PropertyKey.Builder keyBuilder = accessor.keyBuilder();
-
-    LeaderHistory history = accessor.getProperty(keyBuilder.controllerLeaderHistory());
-    if (history == null) {
-      history = new LeaderHistory(PropertyType.HISTORY.toString());
-    }
-    history.updateHistory(manager.getClusterName(), manager.getInstanceName());
-    accessor.setProperty(keyBuilder.controllerLeaderHistory(), history);
   }
 }

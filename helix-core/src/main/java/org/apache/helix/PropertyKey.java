@@ -58,9 +58,11 @@ import org.apache.helix.model.HealthStat;
 import org.apache.helix.model.HelixConfigScope.ConfigScopeProperty;
 import org.apache.helix.model.IdealState;
 import org.apache.helix.model.InstanceConfig;
+import org.apache.helix.model.Leader;
 import org.apache.helix.model.LeaderHistory;
 import org.apache.helix.model.LiveInstance;
 import org.apache.helix.model.Message;
+import org.apache.helix.model.MonitoringConfig;
 import org.apache.helix.model.PartitionConfiguration;
 import org.apache.helix.model.PauseSignal;
 import org.apache.helix.model.PersistentStats;
@@ -317,10 +319,28 @@ public class PropertyKey {
      * @param constraintType
      * @return {@link PropertyKey}
      */
-
     public PropertyKey constraint(String constraintType) {
       return new PropertyKey(CONFIGS, ClusterConstraints.class, _clusterName,
           ConfigScopeProperty.CONSTRAINT.toString(), constraintType);
+    }
+
+    /**
+     * Get a property key associated with all {@link MonitoringConfig}
+     * @return {@link PropertyKey}
+     */
+    public PropertyKey monitoringConfigs() {
+      return new PropertyKey(CONFIGS, ConfigScopeProperty.MONITORING, MonitoringConfig.class,
+          _clusterName, ConfigScopeProperty.MONITORING.toString());
+    }
+
+    /**
+     * Get a property key associated with a single {@link MonitoringConfig}
+     * @param monitoringConfigName name of the configuration
+     * @return {@link PropertyKey}
+     */
+    public PropertyKey monitoringConfig(String monitoringConfigName) {
+      return new PropertyKey(CONFIGS, ConfigScopeProperty.MONITORING, MonitoringConfig.class,
+          _clusterName, ConfigScopeProperty.MONITORING.toString(), monitoringConfigName);
     }
 
     /**
@@ -648,11 +668,11 @@ public class PropertyKey {
     }
 
     /**
-     * Get a property key associated with a {@link LiveInstance} leader
+     * Get a property key associated with a {@link Leader} leader
      * @return {@link PropertyKey}
      */
     public PropertyKey controllerLeader() {
-      return new PropertyKey(LEADER, LiveInstance.class, _clusterName);
+      return new PropertyKey(LEADER, Leader.class, _clusterName);
     }
 
     /**

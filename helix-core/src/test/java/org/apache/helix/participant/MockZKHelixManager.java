@@ -47,6 +47,7 @@ import org.apache.helix.manager.zk.ZKHelixDataAccessor;
 import org.apache.helix.manager.zk.ZkBaseDataAccessor;
 import org.apache.helix.manager.zk.ZkClient;
 import org.apache.helix.model.HelixConfigScope.ConfigScopeProperty;
+import org.apache.helix.monitoring.MonitoringServer;
 import org.apache.helix.store.zk.ZkHelixPropertyStore;
 
 public class MockZKHelixManager implements HelixManager {
@@ -265,6 +266,18 @@ public class MockZKHelixManager implements HelixManager {
   public void addControllerMessageListener(MessageListener listener) {
     // TODO Auto-generated method stub
 
+  }
+
+  @Override
+  public void registerMonitoringServer(MonitoringServer monitoringServer) {
+    // TODO Auto-generated method stub
+
+  }
+
+  @Override
+  public MonitoringServer getMonitoringServer() {
+    // TODO Auto-generated method stub
+    return null;
   }
 
 }

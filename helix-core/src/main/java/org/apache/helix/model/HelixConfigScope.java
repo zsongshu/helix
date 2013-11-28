@@ -35,7 +35,8 @@ public class HelixConfigScope {
     PARTICIPANT(2, 0),
     RESOURCE(2, 0),
     PARTITION(2, 1),
-    CONSTRAINT(2, 0);
+    CONSTRAINT(2, 0),
+    MONITORING(2, 0);
 
     final int _zkPathArgNum;
     final int _mapKeyArgNum;
@@ -77,11 +78,14 @@ public class HelixConfigScope {
         "/{clusterName}/CONFIGS/RESOURCE/{resourceName}");
     template.addEntry(ConfigScopeProperty.PARTITION, 2,
         "/{clusterName}/CONFIGS/RESOURCE/{resourceName}");
+    template.addEntry(ConfigScopeProperty.MONITORING, 2,
+        "/{clusterName}/CONFIGS/MONITORING/{configName}");
 
     // get children
     template.addEntry(ConfigScopeProperty.CLUSTER, 1, "/{clusterName}/CONFIGS/CLUSTER");
     template.addEntry(ConfigScopeProperty.PARTICIPANT, 1, "/{clusterName}/CONFIGS/PARTICIPANT");
     template.addEntry(ConfigScopeProperty.RESOURCE, 1, "/{clusterName}/CONFIGS/RESOURCE");
+    template.addEntry(ConfigScopeProperty.MONITORING, 1, "/{clusterName}/CONFIGS/MONITORING");
   }
 
   final ConfigScopeProperty _type;
@@ -91,6 +95,11 @@ public class HelixConfigScope {
    * this is participantName if type is PARTICIPANT or null otherwise
    */
   final String _participantName;
+
+  /**
+   * this is the monitoring config name if type is MONITORING, or null otherwise
+   */
+  final String _monitoringConfigName;
 
   final String _resourceName;
 
@@ -140,6 +149,13 @@ public class HelixConfigScope {
       _resourceName = null;
     }
 
+    // init monitoring config name
+    if (type == ConfigScopeProperty.MONITORING && _isFullKey) {
+      _monitoringConfigName = zkPathKeys.get(1);
+    } else {
+      _monitoringConfigName = null;
+    }
+
     _zkPath = template.instantiate(type, zkPathKeys.toArray(new String[0]));
     _mapKey = mapKey;
   }
@@ -174,6 +190,14 @@ public class HelixConfigScope {
    */
   public String getResourceName() {
     return _resourceName;
+  }
+
+  /**
+   * Get the monitoring config name if it exists
+   * @return the monitoring config name if the type is MONITORING, or null
+   */
+  public String getMonitoringConfigName() {
+    return _monitoringConfigName;
   }
 
   /**

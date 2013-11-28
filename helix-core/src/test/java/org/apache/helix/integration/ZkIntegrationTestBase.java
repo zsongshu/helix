@@ -31,7 +31,7 @@ import org.apache.helix.manager.zk.ZNRecordSerializer;
 import org.apache.helix.manager.zk.ZkBaseDataAccessor;
 import org.apache.helix.manager.zk.ZkClient;
 import org.apache.helix.model.ConfigScope;
-import org.apache.helix.model.LiveInstance;
+import org.apache.helix.model.Leader;
 import org.apache.helix.model.builder.ConfigScopeBuilder;
 import org.apache.helix.tools.ClusterSetup;
 import org.apache.helix.util.ZKClientPool;
@@ -86,7 +86,7 @@ public class ZkIntegrationTestBase {
         new ZKHelixDataAccessor(clusterName, new ZkBaseDataAccessor<ZNRecord>(zkClient));
     Builder keyBuilder = accessor.keyBuilder();
 
-    LiveInstance leader = accessor.getProperty(keyBuilder.controllerLeader());
+    Leader leader = accessor.getProperty(keyBuilder.controllerLeader());
     if (leader == null) {
       return null;
     }

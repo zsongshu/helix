@@ -35,6 +35,7 @@ import org.apache.helix.api.id.MessageId;
 import org.apache.helix.api.id.SessionId;
 import org.apache.helix.manager.zk.DefaultSchedulerMessageHandlerFactory;
 import org.apache.helix.manager.zk.ZkClient;
+import org.apache.helix.model.Leader;
 import org.apache.helix.model.LiveInstance;
 import org.apache.helix.model.Message;
 import org.apache.helix.model.Message.MessageType;
@@ -125,7 +126,7 @@ public class SchedulerTasksResource extends ServerResource {
       }
       HelixDataAccessor accessor =
           ClusterRepresentationUtil.getClusterDataAccessor(zkClient, clusterName);
-      LiveInstance leader = accessor.getProperty(accessor.keyBuilder().controllerLeader());
+      Leader leader = accessor.getProperty(accessor.keyBuilder().controllerLeader());
       if (leader == null) {
         throw new HelixException("There is no leader for the cluster " + clusterName);
       }

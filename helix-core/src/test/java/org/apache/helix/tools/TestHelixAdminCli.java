@@ -39,7 +39,7 @@ import org.apache.helix.manager.zk.ZKUtil;
 import org.apache.helix.manager.zk.ZkBaseDataAccessor;
 import org.apache.helix.model.IdealState;
 import org.apache.helix.model.InstanceConfig;
-import org.apache.helix.model.LiveInstance;
+import org.apache.helix.model.Leader;
 import org.apache.helix.store.ZNRecordJsonSerializer;
 import org.apache.helix.tools.ClusterStateVerifier.BestPossAndExtViewZkVerifier;
 import org.apache.helix.tools.ClusterStateVerifier.MasterNbInExtViewVerifier;
@@ -283,13 +283,13 @@ public class TestHelixAdminCli extends ZkIntegrationTestBase {
     // verify leader node
     BaseDataAccessor<ZNRecord> baseAccessor = new ZkBaseDataAccessor<ZNRecord>(_gZkClient);
     HelixDataAccessor accessor = new ZKHelixDataAccessor(grandClusterName, baseAccessor);
-    LiveInstance controllerLeader = accessor.getProperty(accessor.keyBuilder().controllerLeader());
+    Leader controllerLeader = accessor.getProperty(accessor.keyBuilder().controllerLeader());
     Assert.assertNotNull(controllerLeader,
         "controllerLeader should be either controller_9000 or controller_9001");
     Assert.assertTrue(controllerLeader.getInstanceName().startsWith("controller_900"));
 
     accessor = new ZKHelixDataAccessor(clusterName, baseAccessor);
-    LiveInstance leader = accessor.getProperty(accessor.keyBuilder().controllerLeader());
+    Leader leader = accessor.getProperty(accessor.keyBuilder().controllerLeader());
     for (int i = 0; i < 20; i++) {
       if (leader != null) {
         break;
@@ -388,8 +388,7 @@ public class TestHelixAdminCli extends ZkIntegrationTestBase {
 
   private void setupCluster(String clusterName, String grandClusterName, final int n,
       MockParticipantManager[] participants, ClusterDistributedController[] controllers)
-      throws Exception,
-      InterruptedException {
+      throws Exception, InterruptedException {
     // add cluster
     String command = "-zkSvr " + ZK_ADDR + " -addCluster " + clusterName;
     ClusterSetup.processCommandLineArgs(command.split("\\s+"));

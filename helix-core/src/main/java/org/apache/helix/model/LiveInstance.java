@@ -37,8 +37,7 @@ public class LiveInstance extends HelixProperty {
   public enum LiveInstanceProperty {
     SESSION_ID,
     HELIX_VERSION,
-    LIVE_INSTANCE,
-    ZKPROPERTYTRANSFERURL
+    LIVE_INSTANCE
   }
 
   private static final Logger _logger = Logger.getLogger(LiveInstance.class.getName());
@@ -161,22 +160,6 @@ public class LiveInstance extends HelixProperty {
    */
   public long getModifiedTime() {
     return _record.getModifiedTime();
-  }
-
-  /**
-   * Get a web service URL where ZK properties can be transferred to
-   * @return a fully-qualified URL
-   */
-  public String getWebserviceUrl() {
-    return _record.getSimpleField(LiveInstanceProperty.ZKPROPERTYTRANSFERURL.toString());
-  }
-
-  /**
-   * Set a web service URL where ZK properties can be transferred to
-   * @param url a fully-qualified URL
-   */
-  public void setWebserviceUrl(String url) {
-    _record.setSimpleField(LiveInstanceProperty.ZKPROPERTYTRANSFERURL.toString(), url);
   }
 
   @Override

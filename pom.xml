@@ -198,6 +198,7 @@ under the License.
     <module>helix-admin-webapp</module>
     <module>helix-agent</module>
     <module>helix-examples</module>
+    <module>helix-monitor-server</module>
     <module>recipes</module>
     <module>site-releases</module>
   </modules>
@@ -255,6 +256,10 @@ under the License.
       <id>jboss-fs-public</id>
       <name>JBoss FuseSource repository</name>
       <url>http://repository.jboss.org/nexus/content/groups/fs-public/</url>
+    </repository>
+    <repository>
+      <id>clojars.org</id>
+      <url>http://clojars.org/repo</url>
     </repository>
   </repositories>
 

@@ -34,6 +34,7 @@ import org.apache.helix.ZNRecord;
 import org.apache.helix.manager.zk.ZKHelixDataAccessor;
 import org.apache.helix.manager.zk.ZkBaseDataAccessor;
 import org.apache.helix.manager.zk.ZkClient;
+import org.apache.helix.model.Leader;
 import org.apache.helix.model.LiveInstance;
 import org.apache.helix.tools.ClusterSetup;
 import org.apache.helix.util.StatusUpdateUtil.Level;
@@ -68,7 +69,7 @@ public class ControllerResource extends ServerResource {
         new ZKHelixDataAccessor(clusterName, new ZkBaseDataAccessor<ZNRecord>(zkClient));
 
     ZNRecord record = null;
-    LiveInstance leader = accessor.getProperty(keyBuilder.controllerLeader());
+    Leader leader = accessor.getProperty(keyBuilder.controllerLeader());
     if (leader != null) {
       record = leader.getRecord();
     } else {

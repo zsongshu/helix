@@ -1,0 +1,11 @@
+/target
+/.project
+/.classpath
+/.settings
+/zkdata
+/test-output
+/src/main/scripts/integration-test/var
+/src/main/scripts/target/
+/src/main/scripts/integration-test/script/.metadata_infra
+*.pyc
+/bin

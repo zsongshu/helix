@@ -42,6 +42,7 @@ import org.apache.helix.ScopedConfigChangeListener;
 import org.apache.helix.ZNRecord;
 import org.apache.helix.healthcheck.ParticipantHealthReportCollector;
 import org.apache.helix.model.HelixConfigScope.ConfigScopeProperty;
+import org.apache.helix.monitoring.MonitoringServer;
 import org.apache.helix.participant.StateMachineEngine;
 import org.apache.helix.store.zk.ZkHelixPropertyStore;
 
@@ -259,5 +260,17 @@ public class DummyClusterManager implements HelixManager {
   public void addControllerMessageListener(MessageListener listener) {
     // TODO Auto-generated method stub
 
+  }
+
+  @Override
+  public void registerMonitoringServer(MonitoringServer monitoringServer) {
+    // TODO Auto-generated method stub
+
+  }
+
+  @Override
+  public MonitoringServer getMonitoringServer() {
+    // TODO Auto-generated method stub
+    return null;
   }
 }

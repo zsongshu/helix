@@ -29,6 +29,7 @@ import org.apache.helix.api.id.ClusterId;
 import org.apache.helix.api.id.ControllerId;
 import org.apache.helix.api.id.Id;
 import org.apache.helix.api.id.ParticipantId;
+import org.apache.helix.monitoring.MonitoringServer;
 import org.apache.helix.participant.StateMachineEngine;
 import org.apache.log4j.Logger;
 
@@ -128,6 +129,16 @@ public class ZkHelixAutoController implements HelixAutoController {
   @Override
   public boolean isLeader() {
     return _controller.isLeader();
+  }
+
+  @Override
+  public void registerMonitoringServer(MonitoringServer server) {
+    _controller.registerMonitoringServer(server);
+  }
+
+  @Override
+  public MonitoringServer getMonitoringServer() {
+    return _controller.getMonitoringServer();
   }
 
 }

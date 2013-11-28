@@ -25,6 +25,7 @@ import org.apache.helix.controller.GenericHelixController;
 import org.apache.helix.healthcheck.ParticipantHealthReportCollector;
 import org.apache.helix.manager.zk.ZKHelixManager;
 import org.apache.helix.model.HelixConfigScope.ConfigScopeProperty;
+import org.apache.helix.monitoring.MonitoringServerOwner;
 import org.apache.helix.participant.HelixStateMachineEngine;
 import org.apache.helix.participant.StateMachineEngine;
 import org.apache.helix.spectator.RoutingTableProvider;
@@ -55,7 +56,7 @@ import org.apache.helix.store.zk.ZkHelixPropertyStore;
  * @see RoutingTableProvider RoutingTableProvider for spectator
  * @see GenericHelixController RoutingTableProvider for controller
  */
-public interface HelixManager {
+public interface HelixManager extends MonitoringServerOwner {
 
   public static final String ALLOW_PARTICIPANT_AUTO_JOIN =
       ZKHelixManager.ALLOW_PARTICIPANT_AUTO_JOIN;

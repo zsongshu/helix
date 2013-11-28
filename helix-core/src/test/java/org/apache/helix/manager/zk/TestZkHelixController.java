@@ -30,6 +30,7 @@ import org.apache.helix.ZNRecord;
 import org.apache.helix.ZkUnitTestBase;
 import org.apache.helix.api.id.ClusterId;
 import org.apache.helix.api.id.ControllerId;
+import org.apache.helix.model.Leader;
 import org.apache.helix.model.LiveInstance;
 import org.testng.Assert;
 import org.testng.annotations.Test;
@@ -68,7 +69,7 @@ public class TestZkHelixController extends ZkUnitTestBase {
     // check leader znode exists
     HelixDataAccessor accessor = connection.createDataAccessor(clusterId);
     PropertyKey.Builder keyBuilder = accessor.keyBuilder();
-    LiveInstance leader = accessor.getProperty(keyBuilder.controllerLeader());
+    Leader leader = accessor.getProperty(keyBuilder.controllerLeader());
     Assert.assertNotNull(leader);
     Assert.assertEquals(leader.getInstanceName(), controllerId.stringify());
 
@@ -138,7 +139,7 @@ public class TestZkHelixController extends ZkUnitTestBase {
 
       @Override
       public boolean verify() throws Exception {
-        LiveInstance leader = accessor.getProperty(keyBuilder.controllerLeader());
+        Leader leader = accessor.getProperty(keyBuilder.controllerLeader());
         if (leader == null) {
           return false;
         }

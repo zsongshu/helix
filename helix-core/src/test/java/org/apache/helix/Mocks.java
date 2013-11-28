@@ -40,6 +40,7 @@ import org.apache.helix.messaging.handling.MessageHandlerFactory;
 import org.apache.helix.messaging.handling.MessageTask;
 import org.apache.helix.model.HelixConfigScope.ConfigScopeProperty;
 import org.apache.helix.model.Message;
+import org.apache.helix.monitoring.MonitoringServer;
 import org.apache.helix.participant.StateMachineEngine;
 import org.apache.helix.participant.statemachine.StateModel;
 import org.apache.helix.participant.statemachine.StateModelInfo;
@@ -476,6 +477,18 @@ public class Mocks {
     public void addControllerMessageListener(MessageListener listener) {
       // TODO Auto-generated method stub
 
+    }
+
+    @Override
+    public void registerMonitoringServer(MonitoringServer monitoringServer) {
+      // TODO Auto-generated method stub
+
+    }
+
+    @Override
+    public MonitoringServer getMonitoringServer() {
+      // TODO Auto-generated method stub
+      return null;
     }
 
   }

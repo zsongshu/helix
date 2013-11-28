@@ -41,7 +41,8 @@ import org.apache.helix.healthcheck.HealthStatsAggregationTask;
 import org.apache.helix.healthcheck.HealthStatsAggregator;
 import org.apache.helix.messaging.DefaultMessagingService;
 import org.apache.helix.messaging.handling.MessageHandlerFactory;
-import org.apache.helix.model.LiveInstance;
+import org.apache.helix.model.Leader;
+import org.apache.helix.monitoring.MonitoringServer;
 import org.apache.helix.monitoring.StatusDumpTask;
 import org.apache.log4j.Logger;
 
@@ -58,8 +59,10 @@ public class ZkHelixController implements HelixController {
   final HelixDataAccessor _accessor;
   final HelixManager _manager;
   final ZkHelixLeaderElection _leaderElection;
+  MonitoringServer _monitoringServer;
 
-  public ZkHelixController(ZkHelixConnection connection, ClusterId clusterId, ControllerId controllerId) {
+  public ZkHelixController(ZkHelixConnection connection, ClusterId clusterId,
+      ControllerId controllerId) {
     _connection = connection;
     _clusterId = clusterId;
     _controllerId = controllerId;
@@ -75,6 +78,8 @@ public class ZkHelixController implements HelixController {
 
     _timerTasks.add(new HealthStatsAggregationTask(new HealthStatsAggregator(_manager)));
     _timerTasks.add(new StatusDumpTask(clusterId, _manager.getHelixDataAccessor()));
+
+    _monitoringServer = null;
   }
 
   void startTimerTasks() {
@@ -113,6 +118,11 @@ public class ZkHelixController implements HelixController {
      */
     _connection.resetHandlers(this);
 
+    // stop the monitoring service if it's running
+    if (_monitoringServer != null && _monitoringServer.isStarted()) {
+      _monitoringServer.stop();
+    }
+
   }
 
   void init() {
@@ -122,6 +132,14 @@ public class ZkHelixController implements HelixController {
      */
     if (!_clusterAccessor.isClusterStructureValid()) {
       throw new HelixException("Cluster structure is not set up for cluster: " + _clusterId);
+    }
+
+    /**
+     * start the monitoring service if it exists; this must happen before leader election
+     */
+    if (_monitoringServer != null) {
+      _monitoringServer.addConfigs(_accessor);
+      _monitoringServer.start();
     }
 
     /**
@@ -180,7 +198,7 @@ public class ZkHelixController implements HelixController {
   public boolean isLeader() {
     PropertyKey.Builder keyBuilder = _accessor.keyBuilder();
     try {
-      LiveInstance leader = _accessor.getProperty(keyBuilder.controllerLeader());
+      Leader leader = _accessor.getProperty(keyBuilder.controllerLeader());
       if (leader != null) {
         String leaderName = leader.getInstanceName();
         String sessionId = leader.getSessionId();
@@ -195,13 +213,22 @@ public class ZkHelixController implements HelixController {
     return false;
   }
 
+  @Override
+  public void registerMonitoringServer(MonitoringServer server) {
+    _monitoringServer = server;
+  }
+
+  @Override
+  public MonitoringServer getMonitoringServer() {
+    return _monitoringServer;
+  }
+
   void addListenersToController(GenericHelixController pipeline) {
     try {
       /**
        * setup controller message listener and register message handlers
        */
-      _connection.addControllerMessageListener(this, _messagingService.getExecutor(),
-          _clusterId);
+      _connection.addControllerMessageListener(this, _messagingService.getExecutor(), _clusterId);
       MessageHandlerFactory defaultControllerMsgHandlerFactory =
           new DefaultControllerMessageHandlerFactory();
       _messagingService.getExecutor().registerMessageHandlerFactory(
@@ -224,8 +251,7 @@ public class ZkHelixController implements HelixController {
       _connection.addIdealStateChangeListener(this, pipeline, _clusterId);
       _connection.addControllerListener(this, pipeline, _clusterId);
     } catch (ZkInterruptedException e) {
-      LOG.warn("zk connection is interrupted during addListenersToController()"
-          + e);
+      LOG.warn("zk connection is interrupted during addListenersToController()", e);
     } catch (Exception e) {
       LOG.error("Error addListenersToController", e);
     }

@@ -34,6 +34,7 @@ public class HelixConfigScopeBuilder {
   private String _participantName;
   private String _resourceName;
   private String _partitionName;
+  private String _monitoringConfigName;
 
   public HelixConfigScopeBuilder(ConfigScopeProperty type, String... keys) {
     int argNum = type.getZkPathArgNum() + type.getMapKeyArgNum();
@@ -62,6 +63,11 @@ public class HelixConfigScopeBuilder {
       _resourceName = keys[1];
       if (keys.length > 2) {
         _partitionName = keys[2];
+      }
+      break;
+    case MONITORING:
+      if (keys.length > 1) {
+        _monitoringConfigName = keys[1];
       }
       break;
     default:
@@ -93,6 +99,11 @@ public class HelixConfigScopeBuilder {
     return this;
   }
 
+  public HelixConfigScopeBuilder forMonitoringConfig(String monitoringConfigName) {
+    _participantName = monitoringConfigName;
+    return this;
+  }
+
   public HelixConfigScope build() {
     HelixConfigScope scope = null;
     switch (_type) {
@@ -119,6 +130,13 @@ public class HelixConfigScopeBuilder {
       } else {
         scope =
             new HelixConfigScope(_type, Arrays.asList(_clusterName, _resourceName), _partitionName);
+      }
+      break;
+    case MONITORING:
+      if (_monitoringConfigName == null) {
+        scope = new HelixConfigScope(_type, Arrays.asList(_clusterName), null);
+      } else {
+        scope = new HelixConfigScope(_type, Arrays.asList(_clusterName, _monitoringConfigName), null);
       }
       break;
     default:

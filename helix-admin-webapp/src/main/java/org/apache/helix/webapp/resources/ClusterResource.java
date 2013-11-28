@@ -29,6 +29,7 @@ import org.apache.helix.HelixException;
 import org.apache.helix.PropertyKey.Builder;
 import org.apache.helix.ZNRecord;
 import org.apache.helix.manager.zk.ZkClient;
+import org.apache.helix.model.Leader;
 import org.apache.helix.model.LiveInstance;
 import org.apache.helix.tools.ClusterSetup;
 import org.apache.helix.webapp.RestAdminApplication;
@@ -87,7 +88,7 @@ public class ClusterResource extends ServerResource {
         ClusterRepresentationUtil.getClusterDataAccessor(zkClient, clusterName);
     Builder keyBuilder = accessor.keyBuilder();
 
-    LiveInstance leader = accessor.getProperty(keyBuilder.controllerLeader());
+    Leader leader = accessor.getProperty(keyBuilder.controllerLeader());
     if (leader != null) {
       clusterSummayRecord.setSimpleField("LEADER", leader.getInstanceName());
     } else {

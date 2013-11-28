@@ -61,6 +61,7 @@ import org.apache.helix.model.ExternalView;
 import org.apache.helix.model.HealthStat;
 import org.apache.helix.model.IdealState;
 import org.apache.helix.model.InstanceConfig;
+import org.apache.helix.model.Leader;
 import org.apache.helix.model.LiveInstance;
 import org.apache.helix.model.Message;
 import org.apache.helix.model.PauseSignal;
@@ -420,7 +421,7 @@ public class GenericHelixController implements ConfigChangeListener, IdealStateC
 
     // double check if this controller is the leader
     Builder keyBuilder = accessor.keyBuilder();
-    LiveInstance leader = accessor.getProperty(keyBuilder.controllerLeader());
+    Leader leader = accessor.getProperty(keyBuilder.controllerLeader());
     if (leader == null) {
       logger
           .warn("No controller exists for cluster:" + changeContext.getManager().getClusterName());

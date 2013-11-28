@@ -32,7 +32,7 @@ import org.apache.helix.ZNRecord;
 import org.apache.helix.ZkUnitTestBase;
 import org.apache.helix.manager.zk.ZKHelixDataAccessor;
 import org.apache.helix.manager.zk.ZkBaseDataAccessor;
-import org.apache.helix.model.LiveInstance;
+import org.apache.helix.model.Leader;
 import org.apache.log4j.Logger;
 import org.testng.AssertJUnit;
 import org.testng.annotations.Test;
@@ -69,8 +69,8 @@ public class TestDistControllerElection extends ZkUnitTestBase {
 
     // path = PropertyPathConfig.getPath(PropertyType.LEADER, clusterName);
     // ZNRecord leaderRecord = _gZkClient.<ZNRecord> readData(path);
-    LiveInstance liveInstance = accessor.getProperty(keyBuilder.controllerLeader());
-    AssertJUnit.assertEquals(controllerName, liveInstance.getInstanceName());
+    Leader leader = accessor.getProperty(keyBuilder.controllerLeader());
+    AssertJUnit.assertEquals(controllerName, leader.getInstanceName());
     // AssertJUnit.assertNotNull(election.getController());
     // AssertJUnit.assertNull(election.getLeader());
 
@@ -81,8 +81,8 @@ public class TestDistControllerElection extends ZkUnitTestBase {
     context.setType(NotificationContext.Type.INIT);
     election.onControllerChange(context);
     // leaderRecord = _gZkClient.<ZNRecord> readData(path);
-    liveInstance = accessor.getProperty(keyBuilder.controllerLeader());
-    AssertJUnit.assertEquals(controllerName, liveInstance.getInstanceName());
+    leader = accessor.getProperty(keyBuilder.controllerLeader());
+    AssertJUnit.assertEquals(controllerName, leader.getInstanceName());
     // AssertJUnit.assertNull(election.getController());
     // AssertJUnit.assertNull(election.getLeader());
 
@@ -117,8 +117,8 @@ public class TestDistControllerElection extends ZkUnitTestBase {
     context.setType(NotificationContext.Type.CALLBACK);
     election.onControllerChange(context);
 
-    LiveInstance liveInstance = accessor.getProperty(keyBuilder.controllerLeader());
-    AssertJUnit.assertEquals(controllerName, liveInstance.getInstanceName());
+    Leader leader = accessor.getProperty(keyBuilder.controllerLeader());
+    AssertJUnit.assertEquals(controllerName, leader.getInstanceName());
 
     // path = PropertyPathConfig.getPath(PropertyType.LEADER, clusterName);
     // ZNRecord leaderRecord = _gZkClient.<ZNRecord> readData(path);
@@ -134,8 +134,8 @@ public class TestDistControllerElection extends ZkUnitTestBase {
     context.setType(NotificationContext.Type.CALLBACK);
     election.onControllerChange(context);
 
-    liveInstance = accessor.getProperty(keyBuilder.controllerLeader());
-    AssertJUnit.assertEquals(controllerName, liveInstance.getInstanceName());
+    leader = accessor.getProperty(keyBuilder.controllerLeader());
+    AssertJUnit.assertEquals(controllerName, leader.getInstanceName());
 
     // leaderRecord = _gZkClient.<ZNRecord> readData(path);
     // AssertJUnit.assertEquals(controllerName, leaderRecord.getSimpleField("LEADER"));

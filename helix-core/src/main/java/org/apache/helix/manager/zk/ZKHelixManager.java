@@ -37,12 +37,12 @@ import org.apache.helix.CurrentStateChangeListener;
 import org.apache.helix.ExternalViewChangeListener;
 import org.apache.helix.HealthStateChangeListener;
 import org.apache.helix.HelixAdmin;
+import org.apache.helix.HelixConstants.ChangeType;
 import org.apache.helix.HelixDataAccessor;
 import org.apache.helix.HelixException;
 import org.apache.helix.HelixManager;
 import org.apache.helix.HelixManagerProperties;
 import org.apache.helix.HelixTimerTask;
-import org.apache.helix.HelixConstants.ChangeType;
 import org.apache.helix.IdealStateChangeListener;
 import org.apache.helix.InstanceConfigChangeListener;
 import org.apache.helix.InstanceType;
@@ -63,17 +63,17 @@ import org.apache.helix.healthcheck.ParticipantHealthReportCollector;
 import org.apache.helix.healthcheck.ParticipantHealthReportCollectorImpl;
 import org.apache.helix.healthcheck.ParticipantHealthReportTask;
 import org.apache.helix.messaging.DefaultMessagingService;
-import org.apache.helix.model.ConfigScope;
 import org.apache.helix.model.HelixConfigScope.ConfigScopeProperty;
+import org.apache.helix.model.Leader;
 import org.apache.helix.model.LiveInstance;
-import org.apache.helix.model.builder.ConfigScopeBuilder;
+import org.apache.helix.monitoring.MonitoringServer;
 import org.apache.helix.monitoring.ZKPathDataDumpTask;
 import org.apache.helix.participant.HelixStateMachineEngine;
 import org.apache.helix.participant.StateMachineEngine;
 import org.apache.helix.store.zk.ZkHelixPropertyStore;
 import org.apache.log4j.Logger;
-import org.apache.zookeeper.Watcher.Event.KeeperState;
 import org.apache.zookeeper.Watcher.Event.EventType;
+import org.apache.zookeeper.Watcher.Event.KeeperState;
 import org.apache.zookeeper.ZooKeeper.States;
 
 public class ZKHelixManager implements HelixManager, IZkStateListener {
@@ -106,6 +106,7 @@ public class ZKHelixManager implements HelixManager, IZkStateListener {
   private ConfigAccessor _configAccessor;
   private ZkHelixPropertyStore<ZNRecord> _helixPropertyStore;
   protected LiveInstanceInfoProvider _liveInstanceInfoProvider = null;
+  private MonitoringServer _monitoringServer;
 
   private volatile String _sessionId;
 
@@ -212,6 +213,8 @@ public class ZKHelixManager implements HelixManager, IZkStateListener {
 
     _sessionTimeout =
         getSystemPropertyAsInt("zk.session.timeout", ZkClient.DEFAULT_SESSION_TIMEOUT);
+
+    _monitoringServer = null;
 
     /**
      * instance type specific init
@@ -545,6 +548,11 @@ public class ZKHelixManager implements HelixManager, IZkStateListener {
        */
       _messagingService.getExecutor().shutdown();
 
+      // stop monitoring
+      if (_monitoringServer != null && _monitoringServer.isStarted()) {
+        _monitoringServer.stop();
+      }
+
       // TODO reset user defined handlers only
       resetHandlers();
 
@@ -603,7 +611,7 @@ public class ZKHelixManager implements HelixManager, IZkStateListener {
     }
 
     try {
-      LiveInstance leader = _dataAccessor.getProperty(_keyBuilder.controllerLeader());
+      Leader leader = _dataAccessor.getProperty(_keyBuilder.controllerLeader());
       if (leader != null) {
         String leaderName = leader.getInstanceName();
         String sessionId = leader.getSessionId();
@@ -859,6 +867,16 @@ public class ZKHelixManager implements HelixManager, IZkStateListener {
     initHandlers(_handlers);
   }
 
+  @Override
+  public void registerMonitoringServer(MonitoringServer monitoringServer) {
+    _monitoringServer = monitoringServer;
+  }
+
+  @Override
+  public MonitoringServer getMonitoringServer() {
+    return _monitoringServer;
+  }
+
   void handleNewSessionAsParticipant() throws Exception {
     /**
      * auto-join
@@ -889,6 +907,16 @@ public class ZKHelixManager implements HelixManager, IZkStateListener {
   }
 
   void handleNewSessionAsController() {
+    // get the monitoring service up
+    if (_monitoringServer != null) {
+      if (_monitoringServer.isStarted()) {
+        _monitoringServer.stop();
+      }
+      _monitoringServer.addConfigs(_dataAccessor);
+      _monitoringServer.start();
+    }
+
+    // get the leader election process going
     if (_leaderElectionHandler != null) {
       _leaderElectionHandler.init();
     } else {

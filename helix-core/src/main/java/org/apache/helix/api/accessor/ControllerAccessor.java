@@ -23,7 +23,7 @@ import org.apache.helix.HelixDataAccessor;
 import org.apache.helix.PropertyKey;
 import org.apache.helix.api.Controller;
 import org.apache.helix.api.id.ControllerId;
-import org.apache.helix.model.LiveInstance;
+import org.apache.helix.model.Leader;
 
 public class ControllerAccessor {
   private final HelixDataAccessor _accessor;
@@ -39,7 +39,7 @@ public class ControllerAccessor {
    * @return Controller snapshot, or null
    */
   public Controller readLeader() {
-    LiveInstance leader = _accessor.getProperty(_keyBuilder.controllerLeader());
+    Leader leader = _accessor.getProperty(_keyBuilder.controllerLeader());
     if (leader != null) {
       ControllerId leaderId = ControllerId.from(leader.getId());
       return new Controller(leaderId, leader, true);

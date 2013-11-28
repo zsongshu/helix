@@ -35,6 +35,7 @@ import org.apache.helix.integration.manager.MockParticipantManager;
 import org.apache.helix.manager.zk.ZKUtil;
 import org.apache.helix.model.ExternalView;
 import org.apache.helix.model.IdealState.IdealStateProperty;
+import org.apache.helix.model.Leader;
 import org.apache.helix.model.LiveInstance;
 import org.apache.helix.tools.ClusterStateVerifier.BestPossAndExtViewZkVerifier;
 import org.apache.helix.tools.ClusterStateVerifier.MasterNbInExtViewVerifier;
@@ -778,11 +779,11 @@ public class TestHelixAdminScenariosRest extends AdminTestBase {
 
     // verify leader node
     HelixDataAccessor accessor = distControllers.get("controller_9001").getHelixDataAccessor();
-    LiveInstance controllerLeader = accessor.getProperty(accessor.keyBuilder().controllerLeader());
+    Leader controllerLeader = accessor.getProperty(accessor.keyBuilder().controllerLeader());
     Assert.assertTrue(controllerLeader.getInstanceName().startsWith("controller_900"));
 
     accessor = participants.get("localhost_1232").getHelixDataAccessor();
-    LiveInstance leader = accessor.getProperty(accessor.keyBuilder().controllerLeader());
+    Leader leader = accessor.getProperty(accessor.keyBuilder().controllerLeader());
     for (int i = 0; i < 5; i++) {
       if (leader != null) {
         break;

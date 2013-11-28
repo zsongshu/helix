@@ -61,6 +61,7 @@ import org.apache.helix.model.CurrentState;
 import org.apache.helix.model.ExternalView;
 import org.apache.helix.model.IdealState;
 import org.apache.helix.model.InstanceConfig;
+import org.apache.helix.model.Leader;
 import org.apache.helix.model.LiveInstance;
 import org.apache.helix.model.Message;
 import org.apache.helix.model.PauseSignal;
@@ -194,7 +195,7 @@ public class ClusterAccessor {
       return false;
     }
 
-    LiveInstance leader = _accessor.getProperty(_keyBuilder.controllerLeader());
+    Leader leader = _accessor.getProperty(_keyBuilder.controllerLeader());
     if (leader != null) {
       LOG.error("Can't drop cluster: " + _clusterId + ", because leader: " + leader.getId()
           + " are running, shutdown leader first.");
@@ -213,7 +214,7 @@ public class ClusterAccessor {
       LOG.error("Cluster is not fully set up");
       return null;
     }
-    LiveInstance leader = _accessor.getProperty(_keyBuilder.controllerLeader());
+    Leader leader = _accessor.getProperty(_keyBuilder.controllerLeader());
 
     /**
      * map of constraint-type to constraints

@@ -29,7 +29,7 @@ import org.apache.helix.ZNRecord;
 import org.apache.helix.integration.manager.ClusterControllerManager;
 import org.apache.helix.manager.zk.ZKHelixDataAccessor;
 import org.apache.helix.manager.zk.ZkBaseDataAccessor;
-import org.apache.helix.model.LiveInstance;
+import org.apache.helix.model.Leader;
 import org.apache.helix.tools.ClusterStateVerifier;
 import org.apache.log4j.Logger;
 import org.testng.Assert;
@@ -44,8 +44,7 @@ public class TestStandAloneCMMain extends ZkStandAloneCMTestBase {
     ClusterControllerManager newController = null;
     for (int i = 1; i <= 2; i++) {
       String controllerName = "controller_" + i;
-      newController =
-          new ClusterControllerManager(ZK_ADDR, CLUSTER_NAME, controllerName);
+      newController = new ClusterControllerManager(ZK_ADDR, CLUSTER_NAME, controllerName);
       newController.syncStart();
     }
 
@@ -60,7 +59,7 @@ public class TestStandAloneCMMain extends ZkStandAloneCMTestBase {
 
       @Override
       public boolean verify() throws Exception {
-        LiveInstance leader = accessor.getProperty(keyBuilder.controllerLeader());
+        Leader leader = accessor.getProperty(keyBuilder.controllerLeader());
         if (leader == null) {
           return false;
         }

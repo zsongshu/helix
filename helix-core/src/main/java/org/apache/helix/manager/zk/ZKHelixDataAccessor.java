@@ -45,7 +45,7 @@ import org.apache.helix.ZNRecordUpdater;
 import org.apache.helix.controller.restlet.ZNRecordUpdate;
 import org.apache.helix.controller.restlet.ZNRecordUpdate.OpCode;
 import org.apache.helix.controller.restlet.ZkPropertyTransferClient;
-import org.apache.helix.model.LiveInstance;
+import org.apache.helix.model.Leader;
 import org.apache.log4j.Logger;
 import org.apache.zookeeper.data.Stat;
 
@@ -504,7 +504,7 @@ public class ZKHelixDataAccessor implements HelixDataAccessor, ControllerChangeL
 
   void refreshZkPropertyTransferUrl() {
     try {
-      LiveInstance leader = getProperty(keyBuilder().controllerLeader());
+      Leader leader = getProperty(keyBuilder().controllerLeader());
       if (leader != null) {
         _zkPropertyTransferSvcUrl = leader.getWebserviceUrl();
         LOG.info("_zkPropertyTransferSvcUrl : " + _zkPropertyTransferSvcUrl + " Controller "

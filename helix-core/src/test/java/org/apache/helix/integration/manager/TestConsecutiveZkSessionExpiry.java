@@ -33,7 +33,7 @@ import org.apache.helix.manager.zk.CallbackHandler;
 import org.apache.helix.manager.zk.ZKHelixDataAccessor;
 import org.apache.helix.manager.zk.ZkBaseDataAccessor;
 import org.apache.helix.mock.participant.MockMSModelFactory;
-import org.apache.helix.model.LiveInstance;
+import org.apache.helix.model.Leader;
 import org.apache.helix.tools.ClusterStateVerifier;
 import org.apache.helix.tools.ClusterStateVerifier.BestPossAndExtViewZkVerifier;
 import org.apache.log4j.Logger;
@@ -230,7 +230,7 @@ public class TestConsecutiveZkSessionExpiry extends ZkUnitTestBase {
         new ZKHelixDataAccessor(clusterName, new ZkBaseDataAccessor<ZNRecord>(_gZkClient));
     PropertyKey.Builder keyBuilder = accessor.keyBuilder();
     Assert.assertNotNull(accessor.getProperty(keyBuilder.liveInstance("localhost_12918")));
-    LiveInstance leader = accessor.getProperty(keyBuilder.controllerLeader());
+    Leader leader = accessor.getProperty(keyBuilder.controllerLeader());
     Assert.assertNotNull(leader);
     Assert.assertEquals(leader.getId(), "localhost_12919");
 
