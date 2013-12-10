@@ -199,6 +199,7 @@ under the License.
     <module>helix-agent</module>
     <module>helix-examples</module>
     <module>helix-monitor-server</module>
+    <module>helix-monitor-client</module>
     <module>recipes</module>
     <module>site-releases</module>
   </modules>

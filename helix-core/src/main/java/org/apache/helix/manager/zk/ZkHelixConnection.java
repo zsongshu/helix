@@ -69,6 +69,7 @@ import org.apache.helix.api.id.ResourceId;
 import org.apache.helix.api.id.SessionId;
 import org.apache.helix.messaging.DefaultMessagingService;
 import org.apache.helix.model.HelixConfigScope.ConfigScopeProperty;
+import org.apache.helix.monitoring.MonitoringClient;
 import org.apache.helix.store.HelixPropertyStore;
 import org.apache.helix.store.zk.ZkHelixPropertyStore;
 import org.apache.log4j.Logger;
@@ -105,6 +106,8 @@ public class ZkHelixConnection implements HelixConnection, IZkStateListener {
    * helix version#
    */
   final String _version;
+  
+  private MonitoringClient _monitoringClient;
 
   public ZkHelixConnection(String zkAddr) {
     _zkAddr = zkAddr;
@@ -127,6 +130,7 @@ public class ZkHelixConnection implements HelixConnection, IZkStateListener {
     _properties = new HelixManagerProperties("cluster-manager-version.properties");
     _version = _properties.getVersion();
 
+    _monitoringClient = null;
   }
 
   private int getSystemPropertyAsInt(String propertyKey, int propertyDefaultValue) {
