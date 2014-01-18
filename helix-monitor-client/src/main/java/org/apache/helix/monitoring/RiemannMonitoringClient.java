@@ -311,35 +311,35 @@ public class RiemannMonitoringClient implements MonitoringClient {
   private EventDSL convertEvent(AbstractRiemannClient c, MonitoringEvent helixEvent) {
     EventDSL event = c.event();
     if (helixEvent.host() != null) {
-      event = event.host(helixEvent.host());
+      event.host(helixEvent.host());
     }
     if (helixEvent.service() != null) {
-      event = event.service(helixEvent.service());
+      event.service(helixEvent.service());
     }
     if (helixEvent.eventState() != null) {
-      event = event.state(helixEvent.eventState());
+      event.state(helixEvent.eventState());
     }
     if (helixEvent.description() != null) {
-      event = event.description(helixEvent.description());
+      event.description(helixEvent.description());
     }
     if (helixEvent.time() != null) {
-      event = event.time(helixEvent.time());
+      event.time(helixEvent.time());
     }
     if (helixEvent.ttl() != null) {
-      event = event.ttl(helixEvent.ttl());
+      event.ttl(helixEvent.ttl());
     }
     if (helixEvent.longMetric() != null) {
-      event = event.metric(helixEvent.longMetric());
+      event.metric(helixEvent.longMetric());
     } else if (helixEvent.floatMetric() != null) {
-      event = event.metric(helixEvent.floatMetric());
+      event.metric(helixEvent.floatMetric());
     } else if (helixEvent.doubleMetric() != null) {
-      event = event.metric(helixEvent.doubleMetric());
+      event.metric(helixEvent.doubleMetric());
     }
     if (!helixEvent.tags().isEmpty()) {
-      event = event.tags(helixEvent.tags());
+      event.tags(helixEvent.tags());
     }
     if (!helixEvent.attributes().isEmpty()) {
-      event = event.attributes(helixEvent.attributes());
+      event.attributes.putAll(helixEvent.attributes());
     }
     return event;
   }

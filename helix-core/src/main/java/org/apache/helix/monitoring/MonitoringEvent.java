@@ -40,6 +40,7 @@ public class MonitoringEvent {
   private ClusterId _clusterId;
   private ResourceId _resourceId;
   private PartitionId _partitionId;
+  private String _name;
   private String _host;
   private String _eventState;
   private String _description;
@@ -56,9 +57,10 @@ public class MonitoringEvent {
    */
   public MonitoringEvent() {
     _clusterId = null;
-    _host = null;
     _resourceId = null;
     _partitionId = null;
+    _name = null;
+    _host = null;
     _eventState = null;
     _description = null;
     _time = null;
@@ -68,6 +70,16 @@ public class MonitoringEvent {
     _ttl = null;
     _tags = Lists.newLinkedList();
     _attributes = Maps.newHashMap();
+  }
+
+  /**
+   * Give this event a name
+   * @param name the name
+   * @return MonitoringEvent
+   */
+  public MonitoringEvent name(String name) {
+    _name = name;
+    return this;
   }
 
   /**
@@ -257,7 +269,7 @@ public class MonitoringEvent {
     if (_partitionId == null) {
       _partitionId = PartitionId.from("%");
     }
-    return String.format("%s|%s|%s", _clusterId, _resourceId, _partitionId);
+    return String.format("%s|%s|%s|%s", _clusterId, _resourceId, _partitionId, _name);
   }
 
   String eventState() {

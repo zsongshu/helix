@@ -44,6 +44,11 @@ under the License.
       <artifactId>helix-core</artifactId>
     </dependency>
     <dependency>
+      <groupId>org.apache.helix</groupId>
+      <artifactId>helix-monitor-client</artifactId>
+      <version>0.7.1-incubating-SNAPSHOT</version>
+    </dependency>
+    <dependency>
       <groupId>riemann</groupId>
       <artifactId>riemann</artifactId>
       <version>0.2.4</version>
