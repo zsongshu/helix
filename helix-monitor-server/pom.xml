@@ -54,6 +54,11 @@ under the License.
       <version>0.2.4</version>
     </dependency>
     <dependency>
+      <groupId>factual</groupId>
+      <artifactId>clj-helix</artifactId>
+      <version>0.1.0</version>
+    </dependency>
+    <dependency>
       <groupId>org.testng</groupId>
       <artifactId>testng</artifactId>
       <scope>test</scope>
