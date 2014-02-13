@@ -39,12 +39,9 @@ import org.apache.commons.cli.ParseException;
 import org.apache.helix.HelixAdmin;
 import org.apache.helix.HelixConstants.StateModelToken;
 import org.apache.helix.HelixException;
-import org.apache.helix.PropertyKey.Builder;
 import org.apache.helix.ZNRecord;
 import org.apache.helix.manager.zk.ZKHelixAdmin;
-import org.apache.helix.manager.zk.ZKHelixDataAccessor;
 import org.apache.helix.manager.zk.ZNRecordSerializer;
-import org.apache.helix.manager.zk.ZkBaseDataAccessor;
 import org.apache.helix.manager.zk.ZkClient;
 import org.apache.helix.model.ClusterConstraints;
 import org.apache.helix.model.ClusterConstraints.ConstraintType;
@@ -55,7 +52,6 @@ import org.apache.helix.model.HelixConfigScope.ConfigScopeProperty;
 import org.apache.helix.model.IdealState;
 import org.apache.helix.model.IdealState.RebalanceMode;
 import org.apache.helix.model.InstanceConfig;
-import org.apache.helix.model.LiveInstance;
 import org.apache.helix.model.StateModelDefinition;
 import org.apache.helix.model.builder.ConstraintItemBuilder;
 import org.apache.helix.model.builder.HelixConfigScopeBuilder;
@@ -64,7 +60,7 @@ import org.apache.helix.util.ZKClientPool;
 import org.apache.log4j.Logger;
 
 public class ClusterSetup {
-  private static Logger logger = Logger.getLogger(ClusterSetup.class);
+  private static Logger LOG = Logger.getLogger(ClusterSetup.class);
   public static final String zkServerAddress = "zkSvr";
 
   // List info about the cluster / resource / Instances
@@ -134,20 +130,19 @@ public class ClusterSetup {
   public static final String removeConstraint = "removeConstraint";
 
   static Logger _logger = Logger.getLogger(ClusterSetup.class);
-  String _zkServerAddress;
-  ZkClient _zkClient;
-  HelixAdmin _admin;
+  final HelixAdmin _admin;
 
   public ClusterSetup(String zkServerAddress) {
-    _zkServerAddress = zkServerAddress;
-    _zkClient = ZKClientPool.getZkClient(_zkServerAddress);
-    _admin = new ZKHelixAdmin(_zkClient);
+    ZkClient zkClient = ZKClientPool.getZkClient(zkServerAddress);
+    _admin = new ZKHelixAdmin(zkClient);
   }
 
   public ClusterSetup(ZkClient zkClient) {
-    _zkServerAddress = zkClient.getServers();
-    _zkClient = zkClient;
-    _admin = new ZKHelixAdmin(_zkClient);
+    _admin = new ZKHelixAdmin(zkClient);
+  }
+
+  public ClusterSetup(HelixAdmin admin) {
+    _admin = admin;
   }
 
   public void addCluster(String clusterName, boolean overwritePrevious) {
@@ -238,101 +233,12 @@ public class ClusterSetup {
   }
 
   public void dropInstanceFromCluster(String clusterName, String instanceId) {
-    ZKHelixDataAccessor accessor =
-        new ZKHelixDataAccessor(clusterName, new ZkBaseDataAccessor<ZNRecord>(_zkClient));
-    Builder keyBuilder = accessor.keyBuilder();
-
     InstanceConfig instanceConfig = toInstanceConfig(instanceId);
-    instanceId = instanceConfig.getInstanceName();
-
-    // ensure node is stopped
-    LiveInstance liveInstance = accessor.getProperty(keyBuilder.liveInstance(instanceId));
-    if (liveInstance != null) {
-      throw new HelixException("Can't drop " + instanceId + ", please stop " + instanceId
-          + " before drop it");
-    }
-
-    InstanceConfig config = accessor.getProperty(keyBuilder.instanceConfig(instanceId));
-    if (config == null) {
-      String error = "Node " + instanceId + " does not exist, cannot drop";
-      _logger.warn(error);
-      throw new HelixException(error);
-    }
-
-    // ensure node is disabled, otherwise fail
-    if (config.getInstanceEnabled()) {
-      String error = "Node " + instanceId + " is enabled, cannot drop";
-      _logger.warn(error);
-      throw new HelixException(error);
-    }
-    _admin.dropInstance(clusterName, config);
+    _admin.dropInstance(clusterName, instanceConfig);
   }
 
   public void swapInstance(String clusterName, String oldInstanceName, String newInstanceName) {
-    ZKHelixDataAccessor accessor =
-        new ZKHelixDataAccessor(clusterName, new ZkBaseDataAccessor<ZNRecord>(_zkClient));
-    Builder keyBuilder = accessor.keyBuilder();
-
-    InstanceConfig oldConfig = accessor.getProperty(keyBuilder.instanceConfig(oldInstanceName));
-    if (oldConfig == null) {
-      String error = "Old instance " + oldInstanceName + " does not exist, cannot swap";
-      _logger.warn(error);
-      throw new HelixException(error);
-    }
-
-    InstanceConfig newConfig = accessor.getProperty(keyBuilder.instanceConfig(newInstanceName));
-    if (newConfig == null) {
-      String error = "New instance " + newInstanceName + " does not exist, cannot swap";
-      _logger.warn(error);
-      throw new HelixException(error);
-    }
-
-    // ensure old instance is disabled, otherwise fail
-    if (oldConfig.getInstanceEnabled()) {
-      String error =
-          "Old instance " + oldInstanceName + " is enabled, it need to be disabled and turned off";
-      _logger.warn(error);
-      throw new HelixException(error);
-    }
-    // ensure old instance is down, otherwise fail
-    List<String> liveInstanceNames = accessor.getChildNames(accessor.keyBuilder().liveInstances());
-
-    if (liveInstanceNames.contains(oldInstanceName)) {
-      String error =
-          "Old instance " + oldInstanceName + " is still on, it need to be disabled and turned off";
-      _logger.warn(error);
-      throw new HelixException(error);
-    }
-
-    dropInstanceFromCluster(clusterName, oldInstanceName);
-
-    List<IdealState> existingIdealStates =
-        accessor.getChildValues(accessor.keyBuilder().idealStates());
-    for (IdealState idealState : existingIdealStates) {
-      swapInstanceInIdealState(idealState, oldInstanceName, newInstanceName);
-      accessor.setProperty(
-          accessor.keyBuilder().idealStates(idealState.getResourceId().stringify()), idealState);
-    }
-  }
-
-  void swapInstanceInIdealState(IdealState idealState, String oldInstance, String newInstance) {
-    for (String partition : idealState.getRecord().getMapFields().keySet()) {
-      Map<String, String> valMap = idealState.getRecord().getMapField(partition);
-      if (valMap.containsKey(oldInstance)) {
-        valMap.put(newInstance, valMap.get(oldInstance));
-        valMap.remove(oldInstance);
-      }
-    }
-
-    for (String partition : idealState.getRecord().getListFields().keySet()) {
-      List<String> valList = idealState.getRecord().getListField(partition);
-      for (int i = 0; i < valList.size(); i++) {
-        if (valList.get(i).equals(oldInstance)) {
-          valList.remove(i);
-          valList.add(i, newInstance);
-        }
-      }
-    }
+    _admin.swapInstance(clusterName, oldInstanceName, newInstanceName);
   }
 
   public HelixAdmin getClusterManagementTool() {
@@ -590,18 +496,7 @@ public class ClusterSetup {
   }
 
   @SuppressWarnings("static-access")
-  private static Options constructCommandLineOptions() {
-    Option helpOption =
-        OptionBuilder.withLongOpt(help).withDescription("Prints command-line options info")
-            .create();
-
-    Option zkServerOption =
-        OptionBuilder.withLongOpt(zkServerAddress).withDescription("Provide zookeeper address")
-            .create();
-    zkServerOption.setArgs(1);
-    zkServerOption.setRequired(true);
-    zkServerOption.setArgName("ZookeeperServerAddress(Required)");
-
+  public static OptionGroup constructOptionGroup() {
     Option listClustersOption =
         OptionBuilder.withLongOpt(listClusters).withDescription("List existing clusters").create();
     listClustersOption.setArgs(0);
@@ -791,7 +686,7 @@ public class ClusterSetup {
     partitionInfoOption.setArgName("clusterName resourceName partitionName");
 
     Option enableInstanceOption =
-        OptionBuilder.withLongOpt(enableInstance).withDescription("Enable/disable a Instance")
+        OptionBuilder.withLongOpt(enableInstance).withDescription("Enable/disable an instance")
             .create();
     enableInstanceOption.setArgs(3);
     enableInstanceOption.setRequired(false);
@@ -985,10 +880,26 @@ public class ClusterSetup {
     group.addOption(removeInstanceTagOption);
     group.addOption(instanceGroupTagOption);
 
+    return group;
+  }
+
+  @SuppressWarnings("static-access")
+  private static Options constructCommandLineOptions() {
+    Option helpOption =
+        OptionBuilder.withLongOpt(help).withDescription("Prints command-line options info")
+            .create();
+
+    Option zkServerOption =
+        OptionBuilder.withLongOpt(zkServerAddress).withDescription("Provide zookeeper address")
+            .create();
+    zkServerOption.setArgs(1);
+    zkServerOption.setRequired(true);
+    zkServerOption.setArgName("ZookeeperServerAddress(Required)");
+
     Options options = new Options();
     options.addOption(helpOption);
     options.addOption(zkServerOption);
-    options.addOptionGroup(group);
+    options.addOptionGroup(constructOptionGroup());
     return options;
   }
 
@@ -1021,7 +932,18 @@ public class ClusterSetup {
       System.exit(1);
     }
 
+    if (cmd.hasOption(help)) {
+      printUsage(cliOptions);
+      return 0;
+    }
+
     ClusterSetup setupTool = new ClusterSetup(cmd.getOptionValue(zkServerAddress));
+    processCommandLineArgs(setupTool, cmd);
+    return 0;
+  }
+
+  public static int processCommandLineArgs(ClusterSetup setupTool, CommandLine cmd)
+      throws IOException {
 
     if (cmd.hasOption(addCluster)) {
       String clusterName = cmd.getOptionValue(addCluster);
@@ -1419,11 +1341,6 @@ public class ClusterSetup {
       String instanceName = cmd.getOptionValues(removeInstanceTag)[1];
       String tag = cmd.getOptionValues(removeInstanceTag)[2];
       setupTool.getClusterManagementTool().removeInstanceTag(clusterName, instanceName, tag);
-    }
-    // help option
-    else if (cmd.hasOption(help)) {
-      printUsage(cliOptions);
-      return 0;
     } else if (cmd.hasOption(addResourceProperty)) {
       String clusterName = cmd.getOptionValues(addResourceProperty)[0];
       String resourceName = cmd.getOptionValues(addResourceProperty)[1];

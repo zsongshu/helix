@@ -36,7 +36,8 @@ public class HelixConfigScope {
     RESOURCE(2, 0),
     PARTITION(2, 1),
     CONSTRAINT(2, 0),
-    MONITORING(2, 0);
+    MONITORING(2, 0),
+    ALERT(2, 0);
 
     final int _zkPathArgNum;
     final int _mapKeyArgNum;
@@ -80,12 +81,14 @@ public class HelixConfigScope {
         "/{clusterName}/CONFIGS/RESOURCE/{resourceName}");
     template.addEntry(ConfigScopeProperty.MONITORING, 2,
         "/{clusterName}/CONFIGS/MONITORING/{configName}");
+    template.addEntry(ConfigScopeProperty.ALERT, 2, "/{clusterName}/CONFIGS/ALERT/{configName}");
 
     // get children
     template.addEntry(ConfigScopeProperty.CLUSTER, 1, "/{clusterName}/CONFIGS/CLUSTER");
     template.addEntry(ConfigScopeProperty.PARTICIPANT, 1, "/{clusterName}/CONFIGS/PARTICIPANT");
     template.addEntry(ConfigScopeProperty.RESOURCE, 1, "/{clusterName}/CONFIGS/RESOURCE");
     template.addEntry(ConfigScopeProperty.MONITORING, 1, "/{clusterName}/CONFIGS/MONITORING");
+    template.addEntry(ConfigScopeProperty.ALERT, 1, "/{clusterName}/CONFIGS/ALERT");
   }
 
   final ConfigScopeProperty _type;
@@ -100,6 +103,7 @@ public class HelixConfigScope {
    * this is the monitoring config name if type is MONITORING, or null otherwise
    */
   final String _monitoringConfigName;
+  final String _alertConfigName;
 
   final String _resourceName;
 
@@ -156,6 +160,13 @@ public class HelixConfigScope {
       _monitoringConfigName = null;
     }
 
+    // init alert config name
+    if (type == ConfigScopeProperty.ALERT && _isFullKey) {
+      _alertConfigName = zkPathKeys.get(1);
+    } else {
+      _alertConfigName = null;
+    }
+
     _zkPath = template.instantiate(type, zkPathKeys.toArray(new String[0]));
     _mapKey = mapKey;
   }
@@ -198,6 +209,14 @@ public class HelixConfigScope {
    */
   public String getMonitoringConfigName() {
     return _monitoringConfigName;
+  }
+
+  /**
+   * Get the alert config name if exists
+   * @return the alert config name if the type is ALERT, or null otherwise
+   */
+  public String getAlertConfigName() {
+    return _alertConfigName;
   }
 
   /**

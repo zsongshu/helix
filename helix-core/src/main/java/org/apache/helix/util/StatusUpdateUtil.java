@@ -489,7 +489,7 @@ public class StatusUpdateUtil {
       // ../{sessionId}/{subPath}
       // accessor.setProperty(PropertyType.ERRORS_CONTROLLER, record,
       // statusUpdateSubPath);
-      accessor.setProperty(keyBuilder.controllerTaskError(statusUpdateSubPath), new Error(record));
+      accessor.updateProperty(keyBuilder.controllerTaskError(statusUpdateSubPath), new Error(record));
     } else {
       // accessor.updateProperty(PropertyType.ERRORS,
       // record,

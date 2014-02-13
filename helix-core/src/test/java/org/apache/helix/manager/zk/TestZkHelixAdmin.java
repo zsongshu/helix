@@ -100,6 +100,7 @@ public class TestZkHelixAdmin extends ZkUnitTestBase {
     config = tool.getInstanceConfig(clusterName, "host1_9999");
     AssertJUnit.assertEquals(config.getId(), "host1_9999");
 
+    tool.enableInstance(clusterName, "host1_9999", false);
     tool.dropInstance(clusterName, config);
     try {
       tool.getInstanceConfig(clusterName, "host1_9999");

@@ -424,4 +424,13 @@ public interface HelixAdmin {
    * Release resources
    */
   void close();
+
+  /**
+   * Swap instances
+   * @param clusterName
+   * @param oldInstanceName
+   * @param newInstanceName
+   */
+  void swapInstance(String clusterName, String oldInstanceName, String newInstanceName);
+
 }

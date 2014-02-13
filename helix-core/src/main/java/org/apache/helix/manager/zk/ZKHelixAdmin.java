@@ -86,6 +86,8 @@ import org.apache.helix.util.RebalanceUtil;
 import org.apache.log4j.Logger;
 
 public class ZKHelixAdmin implements HelixAdmin {
+  static Logger LOG = Logger.getLogger(ZKHelixAdmin.class);
+
   public static final String CONNECTION_TIMEOUT = "helixAdmin.timeOutInSec";
   private final ZkClient _zkClient;
   private final ConfigAccessor _configAccessor;
@@ -130,7 +132,10 @@ public class ZKHelixAdmin implements HelixAdmin {
 
   @Override
   public void dropInstance(String clusterName, InstanceConfig instanceConfig) {
-    // String instanceConfigsPath = HelixUtil.getConfigPath(clusterName);
+    ZKHelixDataAccessor accessor =
+        new ZKHelixDataAccessor(clusterName, new ZkBaseDataAccessor<ZNRecord>(_zkClient));
+    Builder keyBuilder = accessor.keyBuilder();
+
     String instanceConfigsPath =
         PropertyPathConfig.getPath(PropertyType.CONFIGS, clusterName,
             ConfigScopeProperty.PARTICIPANT.toString());
@@ -146,6 +151,29 @@ public class ZKHelixAdmin implements HelixAdmin {
     if (!_zkClient.exists(instancePath)) {
       throw new HelixException("Node " + nodeId + " does not exist in instances for cluster "
           + clusterName);
+    }
+
+    String instanceId = instanceConfig.getInstanceName();
+
+    // ensure node is stopped
+    LiveInstance liveInstance = accessor.getProperty(keyBuilder.liveInstance(instanceId));
+    if (liveInstance != null) {
+      throw new HelixException("Can't drop " + instanceId + ", please stop " + instanceId
+          + " before drop it");
+    }
+
+    InstanceConfig config = accessor.getProperty(keyBuilder.instanceConfig(instanceId));
+    if (config == null) {
+      String error = "Node " + instanceId + " does not exist, cannot drop";
+      LOG.warn(error);
+      throw new HelixException(error);
+    }
+
+    // ensure node is disabled, otherwise fail
+    if (config.getInstanceEnabled()) {
+      String error = "Node " + instanceId + " is enabled, cannot drop";
+      LOG.warn(error);
+      throw new HelixException(error);
     }
 
     // delete config path
@@ -917,7 +945,8 @@ public class ZKHelixAdmin implements HelixAdmin {
         new ZKHelixDataAccessor(grandCluster, new ZkBaseDataAccessor<ZNRecord>(_zkClient));
     Builder keyBuilder = accessor.keyBuilder();
 
-    accessor.setProperty(keyBuilder.idealStates(idealState.getResourceId().stringify()), idealState);
+    accessor
+        .setProperty(keyBuilder.idealStates(idealState.getResourceId().stringify()), idealState);
   }
 
   @Override
@@ -1237,10 +1266,79 @@ public class ZKHelixAdmin implements HelixAdmin {
     accessor.setProperty(keyBuilder.instanceConfig(instanceName), config);
   }
 
+  @Override
   public void close() {
     if (_zkClient != null) {
       _zkClient.close();
     }
   }
 
+  @Override
+  public void swapInstance(String clusterName, String oldInstanceName, String newInstanceName) {
+    ZKHelixDataAccessor accessor =
+        new ZKHelixDataAccessor(clusterName, new ZkBaseDataAccessor<ZNRecord>(_zkClient));
+    Builder keyBuilder = accessor.keyBuilder();
+
+    InstanceConfig oldConfig = accessor.getProperty(keyBuilder.instanceConfig(oldInstanceName));
+    if (oldConfig == null) {
+      String error = "Old instance " + oldInstanceName + " does not exist, cannot swap";
+      LOG.warn(error);
+      throw new HelixException(error);
+    }
+
+    InstanceConfig newConfig = accessor.getProperty(keyBuilder.instanceConfig(newInstanceName));
+    if (newConfig == null) {
+      String error = "New instance " + newInstanceName + " does not exist, cannot swap";
+      LOG.warn(error);
+      throw new HelixException(error);
+    }
+
+    // ensure old instance is disabled, otherwise fail
+    if (oldConfig.getInstanceEnabled()) {
+      String error =
+          "Old instance " + oldInstanceName + " is enabled, it need to be disabled and turned off";
+      LOG.warn(error);
+      throw new HelixException(error);
+    }
+    // ensure old instance is down, otherwise fail
+    List<String> liveInstanceNames = accessor.getChildNames(accessor.keyBuilder().liveInstances());
+
+    if (liveInstanceNames.contains(oldInstanceName)) {
+      String error =
+          "Old instance " + oldInstanceName + " is still on, it need to be disabled and turned off";
+      LOG.warn(error);
+      throw new HelixException(error);
+    }
+
+    dropInstance(clusterName, oldConfig);
+
+    List<IdealState> existingIdealStates =
+        accessor.getChildValues(accessor.keyBuilder().idealStates());
+    for (IdealState idealState : existingIdealStates) {
+      swapInstanceInIdealState(idealState, oldInstanceName, newInstanceName);
+      accessor.setProperty(accessor.keyBuilder()
+          .idealStates(idealState.getResourceId().stringify()), idealState);
+    }
+  }
+
+  private void swapInstanceInIdealState(IdealState idealState, String oldInstance,
+      String newInstance) {
+    for (String partition : idealState.getRecord().getMapFields().keySet()) {
+      Map<String, String> valMap = idealState.getRecord().getMapField(partition);
+      if (valMap.containsKey(oldInstance)) {
+        valMap.put(newInstance, valMap.get(oldInstance));
+        valMap.remove(oldInstance);
+      }
+    }
+
+    for (String partition : idealState.getRecord().getListFields().keySet()) {
+      List<String> valList = idealState.getRecord().getListField(partition);
+      for (int i = 0; i < valList.size(); i++) {
+        if (valList.get(i).equals(oldInstance)) {
+          valList.remove(i);
+          valList.add(i, newInstance);
+        }
+      }
+    }
+  }
 }

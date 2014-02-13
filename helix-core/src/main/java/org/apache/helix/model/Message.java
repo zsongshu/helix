@@ -60,7 +60,8 @@ public class Message extends HelixProperty {
     CONTROLLER_MSG,
     TASK_REPLY,
     NO_OP,
-    PARTICIPANT_ERROR_REPORT
+    PARTICIPANT_ERROR_REPORT,
+    ALERT;
   };
 
   /**
@@ -92,7 +93,8 @@ public class Message extends HelixProperty {
     STATE_MODEL_FACTORY_NAME,
     BUCKET_SIZE,
     PARENT_MSG_ID, // used for group message mode
-    INNER_MESSAGE
+    INNER_MESSAGE,
+    ALERT_NAME;
   }
 
   /**

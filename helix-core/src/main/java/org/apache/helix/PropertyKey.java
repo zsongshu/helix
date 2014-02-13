@@ -46,6 +46,7 @@ import static org.apache.helix.PropertyType.STATUSUPDATES_CONTROLLER;
 
 import java.util.Arrays;
 
+import org.apache.helix.model.AlertConfig;
 import org.apache.helix.model.AlertHistory;
 import org.apache.helix.model.AlertStatus;
 import org.apache.helix.model.Alerts;
@@ -341,6 +342,16 @@ public class PropertyKey {
     public PropertyKey monitoringConfig(String monitoringConfigName) {
       return new PropertyKey(CONFIGS, ConfigScopeProperty.MONITORING, MonitoringConfig.class,
           _clusterName, ConfigScopeProperty.MONITORING.toString(), monitoringConfigName);
+    }
+
+    /**
+    * Get a property key associated with a single {@link AlertConfig}
+    * @param alertConfigName name of the configuration
+    * @return {@link PropertyKey}
+    */
+    public PropertyKey alertConfig(String alertConfigName) {
+      return new PropertyKey(CONFIGS, ConfigScopeProperty.ALERT, AlertConfig.class,
+           _clusterName, ConfigScopeProperty.ALERT.name(), alertConfigName);
     }
 
     /**
