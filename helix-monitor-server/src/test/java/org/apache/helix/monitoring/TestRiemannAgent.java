@@ -43,8 +43,6 @@ import org.apache.helix.tools.ClusterStateVerifier;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
-import com.google.common.collect.Lists;
-
 public class TestRiemannAgent extends ZkUnitTestBase {
   @Test
   public void testStartAndStop() throws Exception {

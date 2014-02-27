@@ -345,6 +345,15 @@ public class PropertyKey {
     }
 
     /**
+    * Get a property key associated with all {@link AlertConfig}
+    * @return {@link PropertyKey}
+    */
+    public PropertyKey alertConfigs() {
+      return new PropertyKey(CONFIGS, ConfigScopeProperty.ALERT, AlertConfig.class,
+           _clusterName, ConfigScopeProperty.ALERT.name());
+    }
+
+    /**
     * Get a property key associated with a single {@link AlertConfig}
     * @param alertConfigName name of the configuration
     * @return {@link PropertyKey}

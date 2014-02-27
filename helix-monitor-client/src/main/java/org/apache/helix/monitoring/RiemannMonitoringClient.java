@@ -90,6 +90,7 @@ public class RiemannMonitoringClient implements MonitoringClient {
 
   private int _batchSize;
   private final ResourceId _monitoringServiceName;
+  private final ClusterId _monitoringCluster;
   private int _monitoringServicePartitionNum;
 
   private final HelixManager _spectator;
@@ -119,6 +120,7 @@ public class RiemannMonitoringClient implements MonitoringClient {
       ResourceId monitoringServiceName, int batchSize) {
     _batchSize = batchSize > 0 ? batchSize : 1;
     _monitoringServiceName = monitoringServiceName;
+    _monitoringCluster = monitoringClusterId;
     _monitoringServicePartitionNum = 0;
     _clientMap = new ConcurrentHashMap<ResourceId, RiemannMonitoringClient.MonitoringClientInfo>();
 
@@ -143,7 +145,18 @@ public class RiemannMonitoringClient implements MonitoringClient {
     HelixDataAccessor accessor = _spectator.getHelixDataAccessor();
     IdealState idealState =
         accessor.getProperty(accessor.keyBuilder().idealStates(_monitoringServiceName.stringify()));
+    if (idealState == null) {
+      throw new IllegalArgumentException("Resource for MonitoringService: "
+          + _monitoringServiceName + " doesn't exist in cluster: " + _monitoringCluster);
+    }
+
     _monitoringServicePartitionNum = idealState.getNumPartitions();
+
+    if (_monitoringServicePartitionNum <= 0) {
+      throw new IllegalArgumentException("Invalid partition number of MonitoringService: "
+          + _monitoringServiceName + " in cluster: " + _monitoringCluster + ", was "
+          + _monitoringServicePartitionNum);
+    }
   }
 
   @Override

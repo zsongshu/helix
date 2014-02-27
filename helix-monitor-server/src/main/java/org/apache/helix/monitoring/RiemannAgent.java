@@ -44,7 +44,7 @@ public class RiemannAgent {
   final HelixManager _participant;
   final RiemannClient _client;
 
-  RiemannAgent(String zkAddr, String clusterName, int riemannPort) throws IOException {
+  public RiemannAgent(String zkAddr, String clusterName, int riemannPort) throws IOException {
     _random = new Random();
     _zkAddr = zkAddr;
     _clusterName = clusterName;

@@ -19,6 +19,8 @@ package org.apache.helix.manager.zk;
  * under the License.
  */
 
+import java.util.List;
+
 import org.apache.helix.HelixAdmin;
 import org.apache.helix.HelixDataAccessor;
 import org.apache.helix.HelixException;
@@ -37,7 +39,6 @@ import org.apache.log4j.Logger;
 
 public class DefaultAlertMsgHandlerFactory implements MessageHandlerFactory {
   private static final Logger LOG = Logger.getLogger(DefaultAlertMsgHandlerFactory.class);
-  public static final String DEFAULT_ALERT_CONFIG = "default";
 
   public static class DefaultAlertMsgHandler extends MessageHandler {
     public DefaultAlertMsgHandler(Message message, NotificationContext context) {
@@ -46,18 +47,27 @@ public class DefaultAlertMsgHandlerFactory implements MessageHandlerFactory {
 
     @Override
     public HelixTaskResult handleMessage() throws InterruptedException {
+      LOG.info("Handling alert message: " + _message);
       HelixManager manager = _notificationContext.getManager();
       HelixTaskResult result = new HelixTaskResult();
 
-      // get alert-name from message
+      // Get alert-name from message
       String alertNameStr = _message.getAttribute(Attributes.ALERT_NAME);
       AlertName alertName = AlertName.from(alertNameStr);
 
-      // get action from alert config
+      // Find action from alert config
       HelixDataAccessor accessor = manager.getHelixDataAccessor();
-      AlertConfig defaultAlertConfig =
-          accessor.getProperty(accessor.keyBuilder().alertConfig(DEFAULT_ALERT_CONFIG));
-      AlertAction action = defaultAlertConfig.findAlertAction(alertName);
+      List<AlertConfig> alertConfigs =
+          accessor.getChildValues(accessor.keyBuilder().alertConfigs());
+
+      AlertAction action = null;
+      for (AlertConfig alertConfig : alertConfigs) {
+        action = alertConfig.findAlertAction(alertName);
+        if (action != null) {
+          LOG.info("Find alertAction: " + action + " for alertName " + alertName);
+          break;
+        }
+      }
 
       if (action != null) {
         // perform action
@@ -93,7 +103,7 @@ public class DefaultAlertMsgHandlerFactory implements MessageHandlerFactory {
   }
 
   public DefaultAlertMsgHandlerFactory() {
-    LOG.info("construct default alert message handler factory");
+    LOG.info("Construct default alert message handler factory");
   }
 
   @Override
@@ -102,7 +112,7 @@ public class DefaultAlertMsgHandlerFactory implements MessageHandlerFactory {
 
     if (!type.equals(getMessageType())) {
       throw new HelixException("Unexpected msg type for message " + message.getMessageId()
-           + " type:" + message.getMsgType());
+          + " type:" + message.getMsgType());
     }
 
     return new DefaultAlertMsgHandler(message, context);
@@ -116,7 +126,7 @@ public class DefaultAlertMsgHandlerFactory implements MessageHandlerFactory {
 
   @Override
   public void reset() {
-    LOG.info("reset default alert message handler factory");
+    LOG.info("Reset default alert message handler factory");
   }
 
 }
