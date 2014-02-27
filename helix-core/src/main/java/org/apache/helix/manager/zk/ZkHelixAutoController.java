@@ -131,14 +131,4 @@ public class ZkHelixAutoController implements HelixAutoController {
     return _controller.isLeader();
   }
 
-  @Override
-  public void registerMonitoringServer(MonitoringServer server) {
-    _controller.registerMonitoringServer(server);
-  }
-
-  @Override
-  public MonitoringServer getMonitoringServer() {
-    return _controller.getMonitoringServer();
-  }
-
 }

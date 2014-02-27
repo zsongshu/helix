@@ -20,14 +20,12 @@ package org.apache.helix;
  */
 
 import org.apache.helix.api.id.ControllerId;
-import org.apache.helix.monitoring.MonitoringServerOwner;
 import org.apache.helix.participant.StateMachineEngine;
 
 /**
  * Autonomous controller
  */
-public interface HelixAutoController extends HelixRole, HelixService, HelixConnectionStateListener,
-    MonitoringServerOwner {
+public interface HelixAutoController extends HelixRole, HelixService, HelixConnectionStateListener {
   /**
    * get controller id
    * @return controller id

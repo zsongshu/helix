@@ -159,11 +159,7 @@ public class ZkHelixLeaderElection implements ControllerChangeListener {
       } else {
         LOG.warn("ZKPropertyTransferServer instance is null");
       }
-      MonitoringServer server = manager.getMonitoringServer();
-      if (server != null) {
-        leader.setMonitoringHost(server.getHost());
-        leader.setMonitoringPort(server.getPort());
-      }
+
       boolean success = accessor.createProperty(keyBuilder.controllerLeader(), leader);
       if (success) {
         return true;

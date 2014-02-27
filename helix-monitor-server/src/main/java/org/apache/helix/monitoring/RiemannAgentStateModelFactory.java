@@ -19,19 +19,11 @@ package org.apache.helix.monitoring;
  * under the License.
  */
 
-/**
- * Interface to implement for Helix components that can manage a monitoring server
- */
-public interface MonitoringServerOwner {
-  /**
-   * Attach a monitoring server to this controller
-   * @param server MonitoringServer implementation
-   */
-  void registerMonitoringServer(MonitoringServer server);
+import org.apache.helix.participant.statemachine.StateModelFactory;
 
-  /**
-   * Get the monitoring service, if any, registered with this connection
-   * @return a MonitoringService, or null if none
-   */
-  MonitoringServer getMonitoringServer();
+public class RiemannAgentStateModelFactory extends StateModelFactory<RiemannAgentStateModel> {
+  @Override
+  public RiemannAgentStateModel createNewStateModel(String partitionName) {
+    return new RiemannAgentStateModel();
+  }
 }

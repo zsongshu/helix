@@ -315,40 +315,4 @@ public class HelixConnectionAdaptor implements HelixManager {
     _connection.addControllerMessageListener(_role, listener, _clusterId);
   }
 
-  @Override
-  public void registerMonitoringServer(MonitoringServer monitoringServer) {
-    switch (_role.getType()) {
-    case CONTROLLER:
-      HelixController controller = (HelixController) _role;
-      controller.registerMonitoringServer(monitoringServer);
-      break;
-    case CONTROLLER_PARTICIPANT:
-      HelixAutoController autoController = (HelixAutoController) _role;
-      autoController.registerMonitoringServer(monitoringServer);
-      break;
-    default:
-      LOG.error("A non-controller cannot own a monitoring server!");
-      break;
-    }
-  }
-
-  @Override
-  public MonitoringServer getMonitoringServer() {
-    MonitoringServer server = null;
-    switch (_role.getType()) {
-    case CONTROLLER:
-      HelixController controller = (HelixController) _role;
-      server = controller.getMonitoringServer();
-      break;
-    case CONTROLLER_PARTICIPANT:
-      HelixAutoController autoController = (HelixAutoController) _role;
-      server = autoController.getMonitoringServer();
-      break;
-    default:
-      LOG.error("Cannot get a monitoring server for a non-controller (" + _role.getType() + ")!");
-      break;
-    }
-    return server;
-  }
-
 }

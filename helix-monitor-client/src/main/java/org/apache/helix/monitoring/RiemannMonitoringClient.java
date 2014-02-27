@@ -22,14 +22,19 @@ package org.apache.helix.monitoring;
 import java.io.IOException;
 import java.net.UnknownHostException;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
-import org.I0Itec.zkclient.IZkDataListener;
-import org.apache.helix.BaseDataAccessor;
 import org.apache.helix.HelixDataAccessor;
-import org.apache.helix.ZNRecord;
+import org.apache.helix.HelixManager;
+import org.apache.helix.HelixManagerFactory;
+import org.apache.helix.InstanceType;
 import org.apache.helix.api.id.ClusterId;
-import org.apache.helix.model.Leader;
+import org.apache.helix.api.id.ResourceId;
+import org.apache.helix.model.IdealState;
+import org.apache.helix.model.InstanceConfig;
+import org.apache.helix.spectator.RoutingTableProvider;
 import org.apache.log4j.Logger;
 
 import com.aphyr.riemann.client.AbstractRiemannClient;
@@ -40,113 +45,192 @@ import com.aphyr.riemann.client.UnsupportedJVMException;
 import com.google.common.collect.Lists;
 
 /**
- * A Riemann-based monitoring client
- * Thread safety note: connect and disconnect are serialized to ensure that there
- * is no attempt to connect or disconnect with an inconsistent state. The send routines are not
- * protected for performance reasons, and so a single send/flush may fail.
+ * A Riemann-based monitoring client Thread safety note: connect and disconnect are serialized to
+ * ensure that there is no attempt to connect or disconnect with an inconsistent state. The send
+ * routines are not protected for performance reasons, and so a single send/flush may fail.
  */
 public class RiemannMonitoringClient implements MonitoringClient {
   private static final Logger LOG = Logger.getLogger(RiemannMonitoringClient.class);
-  private String _host;
-  private int _port;
+  public static final String DEFAULT_MONITORING_SERVICE_NAME = "MonitoringService";
+
+  /**
+   * Contains information about a RiemannClient inside a MonitoringClient
+   */
+  class MonitoringClientInfo {
+    /**
+     * host/port of riemann server to which this client connects
+     */
+    String _host;
+    int _port;
+
+    /**
+     * riemann client
+     */
+    RiemannClient _client;
+
+    /**
+     * batch rieman client, null if batch is not enabled
+     */
+    RiemannBatchClient _batchClient;
+
+    /**
+     * list of periodic tasks scheduled on this riemann client
+     */
+    final List<ScheduledItem> _scheduledItems;
+
+    public MonitoringClientInfo() {
+      _host = null;
+      _port = -1;
+      _client = null;
+      _batchClient = null;
+      _scheduledItems = Lists.newArrayList();
+    }
+
+  }
+
   private int _batchSize;
-  private RiemannClient _client;
-  private RiemannBatchClient _batchClient;
-  private List<ScheduledItem> _scheduledItems;
-  private HelixDataAccessor _accessor;
-  private IZkDataListener _leaderListener;
+  private final ResourceId _monitoringServiceName;
+  private int _monitoringServicePartitionNum;
+
+  private final HelixManager _spectator;
+  private final RoutingTableProvider _routingTableProvider;
+  private final Map<ResourceId, MonitoringClientInfo> _clientMap;
 
   /**
    * Create a non-batched monitoring client
-   * @param clusterId the cluster to monitor
-   * @param accessor an accessor for the cluster
+   * @param zkAddr
+   * @param monitoringClusterId
    */
-  public RiemannMonitoringClient(ClusterId clusterId, HelixDataAccessor accessor) {
-    this(clusterId, accessor, 1);
+  public RiemannMonitoringClient(String zkAddr, ClusterId monitoringClusterId) {
+    this(zkAddr, monitoringClusterId, ResourceId.from(DEFAULT_MONITORING_SERVICE_NAME), 1);
   }
 
   /**
    * Create a monitoring client that supports batching
-   * @param clusterId the cluster to monitor
-   * @param accessor an accessor for the cluster
-   * @param batchSize the number of events in a batch
+   * @param clusterId
+   *          the cluster to monitor
+   * @param accessor
+   *          an accessor for the cluster
+   * @param batchSize
+   *          the number of events in a batch
+   * @throws Exception
    */
-  public RiemannMonitoringClient(ClusterId clusterId, HelixDataAccessor accessor, int batchSize) {
-    _host = null;
-    _port = -1;
+  public RiemannMonitoringClient(String zkAddr, ClusterId monitoringClusterId,
+      ResourceId monitoringServiceName, int batchSize) {
     _batchSize = batchSize > 0 ? batchSize : 1;
-    _client = null;
-    _batchClient = null;
-    _accessor = accessor;
-    _scheduledItems = Lists.newLinkedList();
-    _leaderListener = getLeaderListener();
+    _monitoringServiceName = monitoringServiceName;
+    _monitoringServicePartitionNum = 0;
+    _clientMap = new ConcurrentHashMap<ResourceId, RiemannMonitoringClient.MonitoringClientInfo>();
+
+    _spectator =
+        HelixManagerFactory.getZKHelixManager(monitoringClusterId.stringify(), null,
+            InstanceType.SPECTATOR, zkAddr);
+    _routingTableProvider = new RoutingTableProvider();
   }
 
   @Override
-  public void connect() {
+  public void connect() throws Exception {
     if (isConnected()) {
       LOG.error("Already connected to Riemann!");
       return;
     }
 
-    // watch for changes
-    changeLeaderSubscription(true);
+    // Connect spectator to the cluster being monitored
+    _spectator.connect();
+    _spectator.addExternalViewChangeListener(_routingTableProvider);
 
-    // do the connect asynchronously as a tcp establishment could take time
-    Leader leader = _accessor.getProperty(_accessor.keyBuilder().controllerLeader());
-    doConnectAsync(leader);
+    // Get partition number of monitoring service
+    HelixDataAccessor accessor = _spectator.getHelixDataAccessor();
+    IdealState idealState =
+        accessor.getProperty(accessor.keyBuilder().idealStates(_monitoringServiceName.stringify()));
+    _monitoringServicePartitionNum = idealState.getNumPartitions();
   }
 
   @Override
   public void disconnect() {
-    changeLeaderSubscription(false);
-    disconnectInternal();
+    // disconnect internal riemann clients
+    for (ResourceId resource : _clientMap.keySet()) {
+      disconnectInternal(resource);
+    }
+
+    _spectator.disconnect();
+    _monitoringServicePartitionNum = 0;
   }
 
   @Override
   public boolean isConnected() {
-    return _client != null && _client.isConnected();
+    return _spectator.isConnected();
   }
 
-  @Override
-  public boolean flush() {
+  /**
+   * Flush a riemann client for a resource
+   * @param resource
+   * @return
+   */
+  private boolean flush(ResourceId resource) {
     if (!isConnected()) {
       LOG.error("Tried to flush a Riemann client that is not connected!");
       return false;
     }
-    AbstractRiemannClient c = getClient(true);
+
+    AbstractRiemannClient c = getClient(resource, true);
+    if (c == null) {
+      LOG.warn("Fail to get riemann client for resource: " + resource);
+      return false;
+    }
+
     try {
       c.flush();
       return true;
     } catch (IOException e) {
-      LOG.error("Problem flushing the Riemann event queue!", e);
+      LOG.error("Problem flushing the Riemann event queue for resource: " + resource, e);
     }
     return false;
   }
 
   @Override
-  public boolean send(MonitoringEvent event, boolean batch) {
+  public boolean flush() {
+    boolean succeed = true;
+    for (ResourceId resource : _clientMap.keySet()) {
+      succeed = succeed && flush(resource);
+    }
+
+    return succeed;
+  }
+
+  @Override
+  public boolean send(ResourceId resource, MonitoringEvent event, boolean batch) {
     if (!isConnected()) {
       LOG.error("Riemann connection must be active in order to send an event!");
       return false;
     }
-    AbstractRiemannClient c = getClient(batch);
-    convertEvent(c, event).send();
+
+    if (!isConnected(resource)) {
+      connect(resource, null, event);
+    } else {
+      AbstractRiemannClient c = getClient(resource, batch);
+      convertEvent(c, event).send();
+    }
+
     return true;
   }
 
   @Override
-  public boolean sendAndFlush(MonitoringEvent event) {
-    boolean sendResult = send(event, true);
+  public boolean sendAndFlush(ResourceId resource, MonitoringEvent event) {
+
+    boolean sendResult = send(resource, event, true);
     if (sendResult) {
-      return flush();
+      return flush(resource);
     }
     return false;
   }
 
+  /**
+   * Batch should be enabled for either all or none of riemann clients
+   */
   @Override
   public boolean isBatchingEnabled() {
-    return _batchClient != null && _batchClient.isConnected();
+    return _batchSize > 1;
   }
 
   @Override
@@ -154,68 +238,121 @@ public class RiemannMonitoringClient implements MonitoringClient {
     return _batchSize;
   }
 
+  /**
+   * Check if a riemann client for given resource is connected
+   * @param resource
+   * @return true if riemann client is connected, false otherwise
+   */
+  private boolean isConnected(ResourceId resource) {
+    if (!isConnected()) {
+      return false;
+    }
+
+    MonitoringClientInfo clientInfo = _clientMap.get(resource);
+    return clientInfo != null && clientInfo._client != null && clientInfo._client.isConnected();
+  }
+
   @Override
-  public void every(long interval, long delay, TimeUnit unit, Runnable r) {
+  public synchronized void every(ResourceId resource, long interval, long delay, TimeUnit unit,
+      Runnable r) {
+    if (!isConnected()) {
+      LOG.error("Riemann client must be connected in order to send events!");
+      return;
+    }
+
     ScheduledItem scheduledItem = new ScheduledItem();
     scheduledItem.interval = interval;
     scheduledItem.delay = delay;
     scheduledItem.unit = unit;
     scheduledItem.r = r;
-    _scheduledItems.add(scheduledItem);
-    if (isConnected()) {
-      getClient().every(interval, delay, unit, r);
+
+    if (isConnected(resource)) {
+      MonitoringClientInfo clientInfo = _clientMap.get(resource);
+      clientInfo._scheduledItems.add(scheduledItem);
+      getClient(resource).every(interval, delay, unit, r);
+    } else {
+      connect(resource, scheduledItem, null);
     }
   }
 
   /**
-   * Get a raw, non-batched Riemann client.
-   * WARNING: do not cache this, as it may be disconnected without notice
+   * Connect a riemann client to riemann server given a resource
+   * @param resource
+   * @param scheduledItem
+   * @param pendingEvent
+   */
+  private void connect(ResourceId resource, ScheduledItem scheduledItem,
+      MonitoringEvent pendingEvent) {
+    // Hash by resourceId
+    int partitionKey = resource.hashCode() % _monitoringServicePartitionNum;
+    List<InstanceConfig> instances =
+        _routingTableProvider.getInstances(_monitoringServiceName.stringify(),
+            _monitoringServiceName + "_" + partitionKey, "ONLINE");
+
+    if (instances.size() == 0) {
+      LOG.error("Riemann monitoring server for resource: " + resource + " at partitionKey: "
+          + partitionKey + " is not available");
+      return;
+    }
+
+    InstanceConfig instanceConfig = instances.get(0);
+    String host = instanceConfig.getHostName();
+    int port = Integer.parseInt(instanceConfig.getPort());
+
+    // Do the connect asynchronously as a tcp establishment could take time
+    doConnectAsync(resource, host, port, scheduledItem, pendingEvent);
+  }
+
+  /**
+   * Get a raw, non-batched Riemann client. WARNING: do not cache this, as it may be disconnected
+   * without notice
    * @return RiemannClient
    */
-  private RiemannClient getClient() {
-    return _client;
+  private RiemannClient getClient(ResourceId resource) {
+    MonitoringClientInfo clientInfo = _clientMap.get(resource);
+    return clientInfo == null ? null : clientInfo._client;
   }
 
   /**
-   * Get a batched Riemann client (if batching is supported)
-   * WARNING: do not cache this, as it may be disconnected without notice
+   * Get a batched Riemann client (if batching is supported) WARNING: do not cache this, as it may
+   * be disconnected without notice
    * @return RiemannBatchClient
    */
-  private RiemannBatchClient getBatchClient() {
-    return _batchClient;
+  private RiemannBatchClient getBatchClient(ResourceId resource) {
+    MonitoringClientInfo clientInfo = _clientMap.get(resource);
+    return clientInfo == null ? null : clientInfo._batchClient;
   }
 
   /**
-   * Get a Riemann client
-   * WARNING: do not cache this, as it may be disconnected without notice
-   * @param batch true if the client is preferred to support batching, false otherwise
+   * Get a Riemann client WARNING: do not cache this, as it may be disconnected without notice
+   * @param batch
+   *          true if the client is preferred to support batching, false otherwise
    * @return AbstractRiemannClient
    */
-  private AbstractRiemannClient getClient(boolean batch) {
+  private AbstractRiemannClient getClient(ResourceId resource, boolean batch) {
     if (batch && isBatchingEnabled()) {
-      return getBatchClient();
+      return getBatchClient(resource);
     } else {
-      return getClient();
+      return getClient(resource);
     }
   }
 
   /**
    * Based on the contents of the leader node, connect to a Riemann server
-   * @param leader node containing host/port
+   * @param leader
+   *          node containing host/port
    */
-  private void doConnectAsync(final Leader leader) {
+  private void doConnectAsync(final ResourceId resource, final String host, final int port,
+      final ScheduledItem scheduledItem, final MonitoringEvent pendingEvent) {
     new Thread() {
       @Override
       public void run() {
         synchronized (RiemannMonitoringClient.this) {
-          // only connect if the leader is available; otherwise it will be picked up by the callback
-          if (leader != null) {
-            _host = leader.getMonitoringHost();
-            _port = leader.getMonitoringPort();
-          }
-          // connect if there's a valid host and port
-          if (_host != null && _port != -1) {
-            connectInternal(_host, _port);
+          if (resource != null && host != null && port != -1) {
+            connectInternal(resource, host, port, scheduledItem, pendingEvent);
+          } else {
+            LOG.error("Fail to doConnectAsync becaue of invalid arguments, resource: " + resource
+                + ", host: " + host + ", port: " + port);
           }
         }
       }
@@ -224,24 +361,52 @@ public class RiemannMonitoringClient implements MonitoringClient {
 
   /**
    * Establishment of a connection to a Riemann server
-   * @param host monitoring server hostname
-   * @param port monitoring server port
+   * @param resource
+   * @param host
+   * @param port
+   * @param scheduledItem
+   * @param pendingEvent
    */
-  private synchronized void connectInternal(String host, int port) {
-    disconnectInternal();
-    try {
-      _client = RiemannClient.tcp(host, port);
-      _client.connect();
-      // we might have to reschedule tasks
-      for (ScheduledItem item : _scheduledItems) {
-        _client.every(item.interval, item.delay, item.unit, item.r);
+  private synchronized void connectInternal(ResourceId resource, String host, int port,
+      ScheduledItem scheduledItem, MonitoringEvent pendingEvent) {
+    MonitoringClientInfo clientInfo = _clientMap.get(resource);
+    if (clientInfo != null && clientInfo._host.equals(host) && clientInfo._port == port
+        && clientInfo._client != null && clientInfo._client.isConnected()) {
+      LOG.info("Riemann client for resource: " + resource + " already connected on " + host + ":"
+          + port);
+
+      // We might have to reschedule tasks
+      if (scheduledItem != null) {
+        clientInfo._scheduledItems.add(scheduledItem);
+        clientInfo._client.every(scheduledItem.interval, scheduledItem.delay, scheduledItem.unit,
+            scheduledItem.r);
       }
+
+      // Sending over pending event
+      if (pendingEvent != null) {
+        convertEvent(clientInfo._client, pendingEvent).send();
+      }
+
+      return;
+    }
+
+    // Disconnect from previous riemann server
+    disconnectInternal(resource);
+
+    // Connect to new riemann server
+    RiemannClient client = null;
+    RiemannBatchClient batchClient = null;
+    try {
+      client = RiemannClient.tcp(host, port);
+      client.connect();
     } catch (IOException e) {
       LOG.error("Error establishing a connection!", e);
+
     }
-    if (_client != null && getBatchSize() > 1) {
+
+    if (client != null && getBatchSize() > 1) {
       try {
-        _batchClient = new RiemannBatchClient(_batchSize, _client);
+        batchClient = new RiemannBatchClient(_batchSize, client);
       } catch (UnknownHostException e) {
         _batchSize = 1;
         LOG.error("Could not resolve host", e);
@@ -250,60 +415,61 @@ public class RiemannMonitoringClient implements MonitoringClient {
         LOG.warn("Batching not enabled because of incompatible JVM", e);
       }
     }
+
+    if (clientInfo == null) {
+      clientInfo = new MonitoringClientInfo();
+    }
+
+    clientInfo._host = host;
+    clientInfo._port = port;
+    clientInfo._client = client;
+    clientInfo._batchClient = batchClient;
+    if (scheduledItem != null) {
+      clientInfo._scheduledItems.add(scheduledItem);
+    }
+    _clientMap.put(resource, clientInfo);
+
+    // We might have to reschedule tasks
+    for (ScheduledItem item : clientInfo._scheduledItems) {
+      client.every(item.interval, item.delay, item.unit, item.r);
+    }
+
+    // Send over pending event
+    if (pendingEvent != null) {
+      convertEvent(client, pendingEvent).send();
+    }
   }
 
   /**
    * Teardown of a connection to a Riemann server
    */
-  private synchronized void disconnectInternal() {
+  private synchronized void disconnectInternal(ResourceId resource) {
+    MonitoringClientInfo clientInfo = _clientMap.get(resource);
+    if (clientInfo == null) {
+      return;
+    }
+
+    RiemannBatchClient batchClient = clientInfo._batchClient;
+    RiemannClient client = clientInfo._client;
+
+    clientInfo._batchClient = null;
+    clientInfo._client = null;
+
     try {
-      if (_batchClient != null && _batchClient.isConnected()) {
-        _batchClient.disconnect();
-      } else if (_client != null && _client.isConnected()) {
-        _client.disconnect();
+      if (batchClient != null && batchClient.isConnected()) {
+        batchClient.scheduler().shutdown();
+        batchClient.disconnect();
+      } else if (client != null && client.isConnected()) {
+        client.scheduler().shutdown();
+        client.disconnect();
       }
     } catch (IOException e) {
       LOG.error("Disconnection error", e);
     }
-    _batchClient = null;
-    _client = null;
   }
 
   /**
-   * Change the subscription status to the Leader node
-   * @param subscribe true to subscribe, false to unsubscribe
-   */
-  private void changeLeaderSubscription(boolean subscribe) {
-    String leaderPath = _accessor.keyBuilder().controllerLeader().getPath();
-    BaseDataAccessor<ZNRecord> baseAccessor = _accessor.getBaseDataAccessor();
-    if (subscribe) {
-      baseAccessor.subscribeDataChanges(leaderPath, _leaderListener);
-    } else {
-      baseAccessor.unsubscribeDataChanges(leaderPath, _leaderListener);
-    }
-  }
-
-  /**
-   * Get callbacks for when the leader changes
-   * @return implemented IZkDataListener
-   */
-  private IZkDataListener getLeaderListener() {
-    return new IZkDataListener() {
-      @Override
-      public void handleDataChange(String dataPath, Object data) throws Exception {
-        Leader leader = new Leader((ZNRecord) data);
-        doConnectAsync(leader);
-      }
-
-      @Override
-      public void handleDataDeleted(String dataPath) throws Exception {
-        disconnectInternal();
-      }
-    };
-  }
-
-  /**
-   * Change a helix event into a Riemann event
+   * Change a helix monitoring event into a Riemann event
    * @param c Riemann client
    * @param helixEvent helix event
    * @return Riemann EventDSL

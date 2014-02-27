@@ -268,16 +268,4 @@ public class MockZKHelixManager implements HelixManager {
 
   }
 
-  @Override
-  public void registerMonitoringServer(MonitoringServer monitoringServer) {
-    // TODO Auto-generated method stub
-
-  }
-
-  @Override
-  public MonitoringServer getMonitoringServer() {
-    // TODO Auto-generated method stub
-    return null;
-  }
-
 }

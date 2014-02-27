@@ -20,10 +20,8 @@ package org.apache.helix;
  */
 
 import org.apache.helix.api.id.ControllerId;
-import org.apache.helix.monitoring.MonitoringServerOwner;
 
-public interface HelixController extends HelixRole, HelixService, HelixConnectionStateListener,
-    MonitoringServerOwner {
+public interface HelixController extends HelixRole, HelixService, HelixConnectionStateListener {
 
   /**
    * get controller id

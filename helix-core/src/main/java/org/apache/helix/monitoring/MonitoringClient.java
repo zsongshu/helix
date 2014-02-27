@@ -21,14 +21,17 @@ package org.apache.helix.monitoring;
 
 import java.util.concurrent.TimeUnit;
 
+import org.apache.helix.api.id.ResourceId;
+
 /**
  * Interface for a client that can register with a monitoring server and send events for monitoring
  */
 public interface MonitoringClient {
   /**
    * Connect. May be asynchronous.
+   * @throws Exception
    */
-  void connect();
+  void connect() throws Exception;
 
   /**
    * Disconnect synchronously.
@@ -37,27 +40,30 @@ public interface MonitoringClient {
 
   /**
    * Send an event
+   * @param resource
    * @param e the event
    * @param batch true if this should be part of a batch operation
    * @return true if the event was sent (or queued for batching), false otherwise
    */
-  boolean send(MonitoringEvent e, boolean batch);
+  boolean send(ResourceId resource, MonitoringEvent e, boolean batch);
 
   /**
    * Send an event and flush any outstanding messages
+   * @param resource
    * @param e the event
    * @return true if events were successfully sent, false otherwise
    */
-  boolean sendAndFlush(MonitoringEvent e);
+  boolean sendAndFlush(ResourceId resource, MonitoringEvent e);
 
   /**
    * Schedule an operation to run
+   * @param resource
    * @param interval the frequency
    * @param delay the amount of time to wait before the first execution
    * @param unit the unit of time to use
    * @param r the code to run
    */
-  void every(long interval, long delay, TimeUnit unit, Runnable r);
+  void every(ResourceId resource, long interval, long delay, TimeUnit unit, Runnable r);
 
   /**
    * Check if there is a valid connection to a monitoring server
@@ -79,7 +85,7 @@ public interface MonitoringClient {
 
   /**
    * Flush all outstanding events
-   * @return true if the events were flushed, false otherwise
+   * @return true if all events were flushed, false otherwise
    */
   boolean flush();
 }

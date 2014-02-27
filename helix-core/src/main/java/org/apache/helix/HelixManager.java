@@ -25,7 +25,6 @@ import org.apache.helix.controller.GenericHelixController;
 import org.apache.helix.healthcheck.ParticipantHealthReportCollector;
 import org.apache.helix.manager.zk.ZKHelixManager;
 import org.apache.helix.model.HelixConfigScope.ConfigScopeProperty;
-import org.apache.helix.monitoring.MonitoringServerOwner;
 import org.apache.helix.participant.HelixStateMachineEngine;
 import org.apache.helix.participant.StateMachineEngine;
 import org.apache.helix.spectator.RoutingTableProvider;
@@ -42,7 +41,6 @@ import org.apache.helix.store.zk.ZkHelixPropertyStore;
  *    // ROLE can be participant, spectator or a controller<br/>
  * manager.connect();
  * manager.addSOMEListener();
- * manager.start()
  * After start is invoked the subsequent interactions will be via listener onChange callbacks
  * There will be 3 scenarios for onChange callback, which can be determined using NotificationContext.type
  * INIT -> will be invoked the first time the listener is added
@@ -56,7 +54,7 @@ import org.apache.helix.store.zk.ZkHelixPropertyStore;
  * @see RoutingTableProvider RoutingTableProvider for spectator
  * @see GenericHelixController RoutingTableProvider for controller
  */
-public interface HelixManager extends MonitoringServerOwner {
+public interface HelixManager {
 
   public static final String ALLOW_PARTICIPANT_AUTO_JOIN =
       ZKHelixManager.ALLOW_PARTICIPANT_AUTO_JOIN;

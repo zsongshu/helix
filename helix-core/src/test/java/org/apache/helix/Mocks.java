@@ -479,18 +479,6 @@ public class Mocks {
 
     }
 
-    @Override
-    public void registerMonitoringServer(MonitoringServer monitoringServer) {
-      // TODO Auto-generated method stub
-
-    }
-
-    @Override
-    public MonitoringServer getMonitoringServer() {
-      // TODO Auto-generated method stub
-      return null;
-    }
-
   }
 
   public static class MockAccessor implements HelixDataAccessor // DataAccessor

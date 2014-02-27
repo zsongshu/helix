@@ -66,6 +66,7 @@ import org.apache.helix.messaging.DefaultMessagingService;
 import org.apache.helix.model.HelixConfigScope.ConfigScopeProperty;
 import org.apache.helix.model.Leader;
 import org.apache.helix.model.LiveInstance;
+import org.apache.helix.model.MonitoringConfig;
 import org.apache.helix.monitoring.MonitoringServer;
 import org.apache.helix.monitoring.ZKPathDataDumpTask;
 import org.apache.helix.participant.HelixStateMachineEngine;
@@ -106,7 +107,6 @@ public class ZKHelixManager implements HelixManager, IZkStateListener {
   private ConfigAccessor _configAccessor;
   private ZkHelixPropertyStore<ZNRecord> _helixPropertyStore;
   protected LiveInstanceInfoProvider _liveInstanceInfoProvider = null;
-  private MonitoringServer _monitoringServer;
 
   private volatile String _sessionId;
 
@@ -213,8 +213,6 @@ public class ZKHelixManager implements HelixManager, IZkStateListener {
 
     _sessionTimeout =
         getSystemPropertyAsInt("zk.session.timeout", ZkClient.DEFAULT_SESSION_TIMEOUT);
-
-    _monitoringServer = null;
 
     /**
      * instance type specific init
@@ -548,11 +546,6 @@ public class ZKHelixManager implements HelixManager, IZkStateListener {
        */
       _messagingService.getExecutor().shutdown();
 
-      // stop monitoring
-      if (_monitoringServer != null && _monitoringServer.isStarted()) {
-        _monitoringServer.stop();
-      }
-
       // TODO reset user defined handlers only
       resetHandlers();
 
@@ -867,16 +860,6 @@ public class ZKHelixManager implements HelixManager, IZkStateListener {
     initHandlers(_handlers);
   }
 
-  @Override
-  public void registerMonitoringServer(MonitoringServer monitoringServer) {
-    _monitoringServer = monitoringServer;
-  }
-
-  @Override
-  public MonitoringServer getMonitoringServer() {
-    return _monitoringServer;
-  }
-
   void handleNewSessionAsParticipant() throws Exception {
     /**
      * auto-join
@@ -907,15 +890,6 @@ public class ZKHelixManager implements HelixManager, IZkStateListener {
   }
 
   void handleNewSessionAsController() {
-    // get the monitoring service up
-    if (_monitoringServer != null) {
-      if (_monitoringServer.isStarted()) {
-        _monitoringServer.stop();
-      }
-      _monitoringServer.addConfigs(_dataAccessor);
-      _monitoringServer.start();
-    }
-
     // get the leader election process going
     if (_leaderElectionHandler != null) {
       _leaderElectionHandler.init();

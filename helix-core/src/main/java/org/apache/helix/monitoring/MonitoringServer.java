@@ -19,8 +19,6 @@ package org.apache.helix.monitoring;
  * under the License.
  */
 
-import org.apache.helix.HelixDataAccessor;
-
 /**
  * Generic interface for a monitoring service that should be attached to a controller.
  */
@@ -36,26 +34,9 @@ public interface MonitoringServer {
   public void stop();
 
   /**
-   * Add a collection of configuration files
-   * @param accessor HelixDataAccessor that can reach Helix's backing store
-   */
-  public void addConfigs(HelixDataAccessor accessor);
-
-  /**
    * Check if the service has been started
    * @return true if started, false otherwise
    */
   public boolean isStarted();
 
-  /**
-   * Get the host of the service
-   * @return String hostname
-   */
-  public String getHost();
-
-  /**
-   * Get the port of the service
-   * @return integer port
-   */
-  public int getPort();
 }
