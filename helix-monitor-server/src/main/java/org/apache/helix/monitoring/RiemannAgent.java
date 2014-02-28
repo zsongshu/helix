@@ -67,6 +67,7 @@ public class RiemannAgent {
     while ((System.currentTimeMillis() - startT) < timeout) {
       try {
         _client.connect();
+        _client.event().service("heartbeat").state("running").ttl(20).sendWithAck();
         break;
       } catch (IOException e) {
         int sleep = _random.nextInt(3000) + 3000;
@@ -95,16 +96,29 @@ public class RiemannAgent {
       @Override
       public void run() {
         try {
-          // send heartbeat metrics
+          // Send heartbeat metrics
           _client.event().service("heartbeat").state("running").ttl(20).sendWithAck();
         } catch (Exception e) {
           LOG.error("Exception in send heatbeat to local riemann server, shutdown RiemannAgent: "
               + _instanceName, e);
-          shutdown();
+          asyncShutdown();
         }
       }
     });
 
+  }
+
+  /**
+   * Do shutdown asynchronously
+   */
+  void asyncShutdown() {
+    new Thread(new Runnable() {
+
+      @Override
+      public void run() {
+        shutdown();
+      }
+    }).start();
   }
 
   public void shutdown() {

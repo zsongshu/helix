@@ -29,7 +29,6 @@ import org.testng.Assert;
 import org.testng.annotations.Test;
 
 import com.aphyr.riemann.client.RiemannClient;
-import com.google.common.collect.Lists;
 
 public class TestRiemannMonitoringServer {
 
