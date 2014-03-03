@@ -221,15 +221,6 @@ public interface HelixConnection {
       ClusterId clusterId, ParticipantId participantId, SessionId sessionId);
 
   /**
-   * add health state change listener
-   * @see HealthStateChangeListener#onHealthChange(String, List, NotificationContext)
-   * @param listener
-   * @param instanceName
-   */
-  void addHealthStateChangeListener(HelixRole role, HealthStateChangeListener listener,
-      ClusterId clusterId, ParticipantId participantId);
-
-  /**
    * add external view change listener
    * @see ExternalViewChangeListener#onExternalViewChange(List, NotificationContext)
    * @param listener

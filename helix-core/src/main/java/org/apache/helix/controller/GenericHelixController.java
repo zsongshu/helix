@@ -32,7 +32,6 @@ import org.apache.helix.ConfigChangeListener;
 import org.apache.helix.ControllerChangeListener;
 import org.apache.helix.CurrentStateChangeListener;
 import org.apache.helix.ExternalViewChangeListener;
-import org.apache.helix.HealthStateChangeListener;
 import org.apache.helix.HelixDataAccessor;
 import org.apache.helix.HelixManager;
 import org.apache.helix.IdealStateChangeListener;
@@ -58,7 +57,6 @@ import org.apache.helix.controller.stages.TaskAssignmentStage;
 import org.apache.helix.controller.stages.PersistAssignmentStage;
 import org.apache.helix.model.CurrentState;
 import org.apache.helix.model.ExternalView;
-import org.apache.helix.model.HealthStat;
 import org.apache.helix.model.IdealState;
 import org.apache.helix.model.InstanceConfig;
 import org.apache.helix.model.Leader;
@@ -84,7 +82,7 @@ import org.apache.log4j.Logger;
  */
 public class GenericHelixController implements ConfigChangeListener, IdealStateChangeListener,
     LiveInstanceChangeListener, MessageListener, CurrentStateChangeListener,
-    ExternalViewChangeListener, ControllerChangeListener, HealthStateChangeListener {
+    ExternalViewChangeListener, ControllerChangeListener {
   private static final Logger logger = Logger.getLogger(GenericHelixController.class.getName());
   volatile boolean init = false;
   private final PipelineRegistry _registry;
@@ -308,16 +306,6 @@ public class GenericHelixController implements ConfigChangeListener, IdealStateC
     event.addAttribute("eventData", statesInfo);
     handleEvent(event);
     logger.info("END: GenericClusterController.onStateChange()");
-  }
-
-  @Override
-  public void onHealthChange(String instanceName, List<HealthStat> reports,
-      NotificationContext changeContext) {
-    /**
-     * When there are more participant ( > 20, can be in hundreds), This callback can be
-     * called quite frequently as each participant reports health stat every minute. Thus
-     * we change the health check pipeline to run in a timer callback.
-     */
   }
 
   @Override

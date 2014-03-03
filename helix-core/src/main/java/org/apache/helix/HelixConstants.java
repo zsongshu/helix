@@ -35,7 +35,6 @@ public interface HelixConstants {
     EXTERNAL_VIEW,
     CONTROLLER,
     MESSAGES_CONTROLLER,
-    HEALTH
     // @formatter:on
   }
 

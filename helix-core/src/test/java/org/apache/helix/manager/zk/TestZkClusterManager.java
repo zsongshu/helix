@@ -106,7 +106,6 @@ public class TestZkClusterManager extends ZkUnitTestBase {
     AssertJUnit.assertEquals("node_1", record.getId());
 
     controller.getMessagingService();
-    controller.getHealthReportCollector();
     controller.getClusterManagmentTool();
 
     controller.handleNewSession();

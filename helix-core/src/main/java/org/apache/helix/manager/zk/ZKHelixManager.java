@@ -35,7 +35,6 @@ import org.apache.helix.ConfigChangeListener;
 import org.apache.helix.ControllerChangeListener;
 import org.apache.helix.CurrentStateChangeListener;
 import org.apache.helix.ExternalViewChangeListener;
-import org.apache.helix.HealthStateChangeListener;
 import org.apache.helix.HelixAdmin;
 import org.apache.helix.HelixConstants.ChangeType;
 import org.apache.helix.HelixDataAccessor;
@@ -57,17 +56,9 @@ import org.apache.helix.PropertyType;
 import org.apache.helix.ScopedConfigChangeListener;
 import org.apache.helix.ZNRecord;
 import org.apache.helix.controller.GenericHelixController;
-import org.apache.helix.healthcheck.HealthStatsAggregationTask;
-import org.apache.helix.healthcheck.HealthStatsAggregator;
-import org.apache.helix.healthcheck.ParticipantHealthReportCollector;
-import org.apache.helix.healthcheck.ParticipantHealthReportCollectorImpl;
-import org.apache.helix.healthcheck.ParticipantHealthReportTask;
 import org.apache.helix.messaging.DefaultMessagingService;
 import org.apache.helix.model.HelixConfigScope.ConfigScopeProperty;
 import org.apache.helix.model.Leader;
-import org.apache.helix.model.LiveInstance;
-import org.apache.helix.model.MonitoringConfig;
-import org.apache.helix.monitoring.MonitoringServer;
 import org.apache.helix.monitoring.ZKPathDataDumpTask;
 import org.apache.helix.participant.HelixStateMachineEngine;
 import org.apache.helix.participant.StateMachineEngine;
@@ -123,7 +114,6 @@ public class ZKHelixManager implements HelixManager, IZkStateListener {
    * participant fields
    */
   private final StateMachineEngine _stateMachineEngine;
-  private final ParticipantHealthReportCollectorImpl _participantHealthInfoCollector;
   private final List<HelixTimerTask> _timerTasks = new ArrayList<HelixTimerTask>();
 
   /**
@@ -220,34 +210,21 @@ public class ZKHelixManager implements HelixManager, IZkStateListener {
     switch (instanceType) {
     case PARTICIPANT:
       _stateMachineEngine = new HelixStateMachineEngine(this);
-      _participantHealthInfoCollector =
-          new ParticipantHealthReportCollectorImpl(this, _instanceName);
-
-      _timerTasks.add(new ParticipantHealthReportTask(_participantHealthInfoCollector));
 
       break;
     case CONTROLLER:
       _stateMachineEngine = null;
-      _participantHealthInfoCollector = null;
-      _controllerTimerTasks.add(new HealthStatsAggregationTask(new HealthStatsAggregator(this)));
       _controllerTimerTasks.add(new StatusDumpTask(_zkclient, this));
 
       break;
     case CONTROLLER_PARTICIPANT:
       _stateMachineEngine = new HelixStateMachineEngine(this);
-      _participantHealthInfoCollector =
-          new ParticipantHealthReportCollectorImpl(this, _instanceName);
-
-      _timerTasks.add(new ParticipantHealthReportTask(_participantHealthInfoCollector));
-
-      _controllerTimerTasks.add(new HealthStatsAggregationTask(new HealthStatsAggregator(this)));
       _controllerTimerTasks.add(new StatusDumpTask(_zkclient, this));
 
       break;
     case ADMINISTRATOR:
     case SPECTATOR:
       _stateMachineEngine = null;
-      _participantHealthInfoCollector = null;
       break;
     default:
       throw new IllegalArgumentException("unrecognized type: " + instanceType);
@@ -414,15 +391,6 @@ public class ZKHelixManager implements HelixManager, IZkStateListener {
       String instanceName, String sessionId) throws Exception {
     addListener(listener, new Builder(_clusterName).currentStates(instanceName, sessionId),
         ChangeType.CURRENT_STATE, new EventType[] {
-            EventType.NodeChildrenChanged, EventType.NodeDeleted, EventType.NodeCreated
-        });
-  }
-
-  @Override
-  public void addHealthStateChangeListener(HealthStateChangeListener listener, String instanceName)
-      throws Exception {
-    addListener(listener, new Builder(_clusterName).healthReports(instanceName), ChangeType.HEALTH,
-        new EventType[] {
             EventType.NodeChildrenChanged, EventType.NodeDeleted, EventType.NodeCreated
         });
   }
@@ -653,12 +621,6 @@ public class ZKHelixManager implements HelixManager, IZkStateListener {
   }
 
   @Override
-  public ParticipantHealthReportCollector getHealthReportCollector() {
-    checkConnected();
-    return _participantHealthInfoCollector;
-  }
-
-  @Override
   public InstanceType getInstanceType() {
     return _instanceType;
   }
@@ -883,10 +845,6 @@ public class ZKHelixManager implements HelixManager, IZkStateListener {
      */
     participantHelper.setupMsgHandler();
 
-    /**
-     * start health check timer task
-     */
-    participantHelper.createHealthCheckPath();
   }
 
   void handleNewSessionAsController() {

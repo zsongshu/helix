@@ -160,12 +160,6 @@ public class NewClusterSetup {
     resetInstance(2, "clusterId instanceId", "Reset all partitions in error state for an instance"),
     resetResource(2, "clusterId resourceId", "Reset all partitions in error state for a resource"),
 
-    // stats/alerts
-    addStat(2, "clusterId statName", "Add a persistent stat"),
-    addAlert(2, "clusterId alertName", "Add an alert"),
-    dropStat(2, "clusterId statName", "Drop a persistent stat"),
-    dropAlert(2, "clusterId alertName", "Drop an alert"),
-
     // set/set/remove configs
     getConfig(3, "scope(e.g. RESOURCE) configScopeArgs(e.g. myCluster,testDB) keys(e.g. k1,k2)",
         "Get configs"),
@@ -910,34 +904,6 @@ public class NewClusterSetup {
     accessor.resetParticipants(participantIds);
   }
 
-  void addStat(String[] optValues) {
-    String clusterName = optValues[0];
-    String statName = optValues[1];
-    ClusterAccessor accessor = clusterAccessor(clusterName);
-    accessor.addStat(statName);
-  }
-
-  void dropStat(String[] optValues) {
-    String clusterName = optValues[0];
-    String statName = optValues[1];
-    ClusterAccessor accessor = clusterAccessor(clusterName);
-    accessor.dropStat(statName);
-  }
-
-  void addAlert(String[] optValues) {
-    String clusterName = optValues[0];
-    String alertName = optValues[1];
-    ClusterAccessor accessor = clusterAccessor(clusterName);
-    accessor.addAlert(alertName);
-  }
-
-  void dropAlert(String[] optValues) {
-    String clusterName = optValues[0];
-    String alertName = optValues[1];
-    ClusterAccessor accessor = clusterAccessor(clusterName);
-    accessor.dropAlert(alertName);
-  }
-
   void expandResource(String[] optValues) {
     String clusterName = optValues[0];
     String resourceName = optValues[1];
@@ -1137,18 +1103,6 @@ public class NewClusterSetup {
           break;
         case resetResource:
           setup.resetResource(optValues);
-          break;
-        case addStat:
-          setup.addStat(optValues);
-          break;
-        case addAlert:
-          setup.addAlert(optValues);
-          break;
-        case dropStat:
-          setup.dropStat(optValues);
-          break;
-        case dropAlert:
-          setup.dropAlert(optValues);
           break;
         case getConfig:
           setup.getConfig(optValues);

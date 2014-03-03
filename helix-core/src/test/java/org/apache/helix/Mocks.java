@@ -31,8 +31,6 @@ import org.I0Itec.zkclient.DataUpdater;
 import org.I0Itec.zkclient.IZkChildListener;
 import org.I0Itec.zkclient.IZkDataListener;
 import org.apache.helix.PropertyKey.Builder;
-import org.apache.helix.healthcheck.HealthReportProvider;
-import org.apache.helix.healthcheck.ParticipantHealthReportCollector;
 import org.apache.helix.messaging.AsyncCallback;
 import org.apache.helix.messaging.handling.HelixTaskExecutor;
 import org.apache.helix.messaging.handling.HelixTaskResult;
@@ -372,12 +370,6 @@ public class Mocks {
     }
 
     @Override
-    public ParticipantHealthReportCollector getHealthReportCollector() {
-      // TODO Auto-generated method stub
-      return null;
-    }
-
-    @Override
     public InstanceType getInstanceType() {
       return InstanceType.PARTICIPANT;
     }
@@ -390,13 +382,6 @@ public class Mocks {
     public void setVersion(String version) {
       _properties.getProperties().put("clustermanager.version", version);
       _version = version;
-
-    }
-
-    @Override
-    public void addHealthStateChangeListener(HealthStateChangeListener listener, String instanceName)
-        throws Exception {
-      // TODO Auto-generated method stub
 
     }
 
@@ -703,22 +688,6 @@ public class Mocks {
       }
       return list;
     }
-  }
-
-  public static class MockHealthReportProvider extends HealthReportProvider {
-
-    @Override
-    public Map<String, String> getRecentHealthReport() {
-      // TODO Auto-generated method stub
-      return null;
-    }
-
-    @Override
-    public void resetStats() {
-      // TODO Auto-generated method stub
-
-    }
-
   }
 
   public static class MockClusterMessagingService implements ClusterMessagingService {

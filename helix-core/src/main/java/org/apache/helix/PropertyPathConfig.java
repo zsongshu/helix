@@ -19,12 +19,9 @@ package org.apache.helix;
  * under the License.
  */
 
-import static org.apache.helix.PropertyType.ALERTS;
-import static org.apache.helix.PropertyType.ALERT_STATUS;
 import static org.apache.helix.PropertyType.CONFIGS;
 import static org.apache.helix.PropertyType.CURRENTSTATES;
 import static org.apache.helix.PropertyType.EXTERNALVIEW;
-import static org.apache.helix.PropertyType.HEALTHREPORT;
 import static org.apache.helix.PropertyType.HISTORY;
 import static org.apache.helix.PropertyType.IDEALSTATES;
 import static org.apache.helix.PropertyType.LIVEINSTANCES;
@@ -40,11 +37,8 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.apache.helix.model.AlertStatus;
-import org.apache.helix.model.Alerts;
 import org.apache.helix.model.CurrentState;
 import org.apache.helix.model.ExternalView;
-import org.apache.helix.model.HealthStat;
 import org.apache.helix.model.IdealState;
 import org.apache.helix.model.InstanceConfig;
 import org.apache.helix.model.LeaderHistory;
@@ -76,9 +70,6 @@ public class PropertyPathConfig {
     typeToClassMapping.put(CURRENTSTATES, CurrentState.class);
     typeToClassMapping.put(STATUSUPDATES, StatusUpdate.class);
     typeToClassMapping.put(HISTORY, LeaderHistory.class);
-    typeToClassMapping.put(HEALTHREPORT, HealthStat.class);
-    typeToClassMapping.put(ALERTS, Alerts.class);
-    typeToClassMapping.put(ALERT_STATUS, AlertStatus.class);
     typeToClassMapping.put(PAUSE, PauseSignal.class);
     typeToClassMapping.put(RESOURCEASSIGNMENTS, ResourceAssignment.class);
 
