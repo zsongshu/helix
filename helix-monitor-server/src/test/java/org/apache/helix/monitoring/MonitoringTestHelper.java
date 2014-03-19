@@ -1,4 +1,4 @@
-package org.apache.helix;
+package org.apache.helix.monitoring;
 
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
@@ -23,6 +23,9 @@ import java.io.IOException;
 import java.net.ServerSocket;
 
 import org.I0Itec.zkclient.NetworkUtil;
+import org.apache.helix.model.MonitoringConfig;
+import org.apache.helix.monitoring.riemann.RiemannConfigs;
+import org.apache.helix.monitoring.riemann.RiemannMonitoringServer;
 
 public class MonitoringTestHelper {
   static final int MAX_PORT = 65535;
@@ -37,7 +40,7 @@ public class MonitoringTestHelper {
     sb.append("(logging/init :file \"/dev/null\")\n\n")
         .append("(tcp-server :host \"0.0.0.0\" :port " + riemannPort + ")\n\n")
         .append("(instrumentation {:interval 1})\n\n")
-        .append("; (udp-server :host \"0.0.0.0\")\n")
+        .append("; (udp-server :host \"0.0.0.0\" :port " + riemannPort + ")\n")
         .append("; (ws-server :host \"0.0.0.0\")\n")
         .append("; (repl-server :host \"0.0.0.0\")\n\n")
         .append("(periodically-expire 1)\n\n")
@@ -52,27 +55,31 @@ public class MonitoringTestHelper {
    * @param proxyPort
    * @return
    */
-  public static String getLatencyCheckConfigString(int proxyPort)
-  {
+  public static String getLatencyCheckConfigString(String zkAddr) {
     StringBuilder sb = new StringBuilder();
     sb.append("(require 'riemann.config)\n")
-      .append("(require 'clj-http.client)\n\n")
-      .append("(defn parse-double\n  \"Convert a string into a double\"\n  ")
-      .append("[instr]\n  (Double/parseDouble instr))\n\n")
-      .append("(defn check-95th-latency\n  \"Check if the 95th percentile latency is within expectations\"\n  ")
-      .append("[e]\n  (let [latency (parse-double (:latency95 e))]\n    ")
-      .append("(if (> latency 1.0) \n      ; Report if the 95th percentile latency exceeds 1.0s\n      ")
-      .append("(do (prn (:host e) \"has an unacceptable 95th percentile latency of\" latency)\n      ")
-      .append("(let [alert-name-str (str \"(\" (:cluster e) \".%.\" (:host e) \")(latency95)>(1000)\" )\n        ")
-      .append("proxy-url (str \"http://localhost:\" " + proxyPort + " )]\n        ")
-      .append("(clj-http.client/post proxy-url {:body alert-name-str }))))))\n\n")
-      .append("(streams\n  (where\n    ; Only process services containing LatencyReport\n    ")
-      .append("(and (service #\".*LatencyReport.*\") (not (state \"expired\")))\n    ")
-      .append("check-95th-latency))\n");
-    
+        .append(
+            "(def alert-proxy (new org.apache.helix.monitoring.riemann.HelixAlertMessenger \""
+                + zkAddr + "\"))\n\n")
+        .append("(defn parse-double\n  \"Convert a string into a double\"\n  ")
+        .append("[instr]\n  (Double/parseDouble instr))\n\n")
+        .append(
+            "(defn check-95th-latency\n  \"Check if the 95th percentile latency is within expectations\"\n  ")
+        .append("[e]\n  (let [latency (parse-double (:latency95 e))]\n    ")
+        .append(
+            "(if (> latency 1.0) \n      ; Report if the 95th percentile latency exceeds 1.0s\n      ")
+        .append(
+            "(do (prn (:host e) \"has an unacceptable 95th percentile latency of\" latency)\n      ")
+        .append(
+            "(let [alert-name-str (str \"(\" (:cluster e) \".%.\" (:host e) \")(latency95)>(1000)\" )]\n        ")
+        .append("(.onAlert alert-proxy alert-name-str))))))\n\n")
+        .append("(streams\n  (where\n    ; Only process services containing LatencyReport\n    ")
+        .append("(and (service #\".*LatencyReport.*\") (not (state \"expired\")))\n    ")
+        .append("check-95th-latency))\n");
+
     return sb.toString();
   }
-  
+
   /**
    * find an available tcp port
    * @return
@@ -110,5 +117,20 @@ public class MonitoringTestHelper {
     }
 
     return port > MAX_PORT ? -1 : port;
+  }
+
+  public static RiemannMonitoringServer startRiemannServer(int port) {
+    MonitoringConfig monitoringConfig = new MonitoringConfig(RiemannConfigs.DEFAULT_RIEMANN_CONFIG);
+    monitoringConfig.setConfig(MonitoringTestHelper.getRiemannConfigString(port));
+
+    String configDir =
+        String.format("%s/%s_%d", System.getProperty("java.io.tmpdir"),
+            RiemannConfigs.DEFAULT_CONFIG_DIR, port);
+    RiemannConfigs.Builder builder =
+        new RiemannConfigs.Builder(configDir).addConfig(monitoringConfig);
+    RiemannMonitoringServer server = new RiemannMonitoringServer(builder.build());
+    server.start();
+
+    return server;
   }
 }

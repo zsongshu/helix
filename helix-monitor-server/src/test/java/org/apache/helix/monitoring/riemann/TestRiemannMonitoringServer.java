@@ -1,4 +1,4 @@
-package org.apache.helix.monitoring;
+package org.apache.helix.monitoring.riemann;
 
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
@@ -22,9 +22,11 @@ package org.apache.helix.monitoring;
 import java.io.IOException;
 import java.util.Date;
 
-import org.apache.helix.MonitoringTestHelper;
 import org.apache.helix.TestHelper;
 import org.apache.helix.model.MonitoringConfig;
+import org.apache.helix.monitoring.MonitoringTestHelper;
+import org.apache.helix.monitoring.riemann.RiemannConfigs;
+import org.apache.helix.monitoring.riemann.RiemannMonitoringServer;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
@@ -55,6 +57,7 @@ public class TestRiemannMonitoringServer {
     try {
       rclient = RiemannClient.tcp("localhost", port);
       rclient.connect();
+      rclient.event().sendWithAck();
     } catch (IOException e) {
       Assert.fail("Riemann server should start on port: " + port);
     }
@@ -68,6 +71,7 @@ public class TestRiemannMonitoringServer {
     try {
       rclient = RiemannClient.tcp("localhost", port);
       rclient.connect();
+      rclient.event().sendWithAck();
       Assert.fail("Riemann server should be stopped on port: " + port);
     } catch (IOException e) {
       // ok

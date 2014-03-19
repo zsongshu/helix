@@ -54,11 +54,6 @@ under the License.
       <version>0.2.4</version>
     </dependency>
     <dependency>
-      <groupId>org.eclipse.jetty.aggregate</groupId>
-      <artifactId>jetty-all-server</artifactId>
-      <version>8.1.14.v20131031</version>
-    </dependency>
-    <dependency>
       <groupId>factual</groupId>
       <artifactId>clj-helix</artifactId>
       <version>0.1.0</version>

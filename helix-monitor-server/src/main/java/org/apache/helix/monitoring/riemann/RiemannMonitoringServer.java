@@ -1,4 +1,4 @@
-package org.apache.helix.monitoring;
+package org.apache.helix.monitoring.riemann;
 
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
@@ -19,6 +19,7 @@ package org.apache.helix.monitoring;
  * under the License.
  */
 
+import org.apache.helix.monitoring.MonitoringServer;
 import org.apache.log4j.Logger;
 
 import clojure.lang.RT;

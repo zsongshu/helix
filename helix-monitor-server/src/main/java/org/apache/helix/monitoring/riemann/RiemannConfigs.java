@@ -1,4 +1,4 @@
-package org.apache.helix.monitoring;
+package org.apache.helix.monitoring.riemann;
 
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
@@ -34,7 +34,7 @@ import com.google.common.collect.Lists;
  */
 public class RiemannConfigs {
   private static final Logger LOG = Logger.getLogger(RiemannConfigs.class);
-  private static final String DEFAULT_CONFIG_DIR = "riemannconfigs";
+  public static final String DEFAULT_CONFIG_DIR = "riemannconfigs";
   public static final String DEFAULT_RIEMANN_CONFIG = "riemann.config";
 
   private final String _configDir;

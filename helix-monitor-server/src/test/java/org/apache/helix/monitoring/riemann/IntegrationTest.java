@@ -1,4 +1,4 @@
-package org.apache.helix.monitoring;
+package org.apache.helix.monitoring.riemann;
 
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
@@ -19,20 +19,19 @@ package org.apache.helix.monitoring;
  * under the License.
  */
 
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 
 import org.apache.helix.BaseDataAccessor;
 import org.apache.helix.ConfigAccessor;
 import org.apache.helix.HelixDataAccessor;
-import org.apache.helix.MonitoringTestHelper;
 import org.apache.helix.PropertyKey;
 import org.apache.helix.TestHelper;
 import org.apache.helix.ZNRecord;
 import org.apache.helix.ZkUnitTestBase;
 import org.apache.helix.api.id.ClusterId;
 import org.apache.helix.api.id.ParticipantId;
-import org.apache.helix.api.id.ResourceId;
 import org.apache.helix.controller.alert.AlertAction;
 import org.apache.helix.controller.alert.AlertName;
 import org.apache.helix.integration.manager.ClusterControllerManager;
@@ -48,7 +47,11 @@ import org.apache.helix.model.IdealState.RebalanceMode;
 import org.apache.helix.model.InstanceConfig;
 import org.apache.helix.model.MonitoringConfig;
 import org.apache.helix.model.builder.HelixConfigScopeBuilder;
-import org.apache.helix.tools.ClusterStateVerifier;
+import org.apache.helix.monitoring.MonitoringEvent;
+import org.apache.helix.monitoring.MonitoringTestHelper;
+import org.apache.helix.monitoring.riemann.RiemannAgent;
+import org.apache.helix.monitoring.riemann.RiemannConfigs;
+import org.apache.helix.monitoring.riemann.RiemannMonitoringServer;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
@@ -86,12 +89,9 @@ public class IntegrationTest extends ZkUnitTestBase {
     controller.syncStart();
 
     // Start helix proxy
-    int proxyPort = MonitoringTestHelper.availableTcpPort();
     final BaseDataAccessor<ZNRecord> baseAccessor = new ZkBaseDataAccessor<ZNRecord>(_gZkClient);
     final HelixDataAccessor accessor = new ZKHelixDataAccessor(clusterName, baseAccessor);
     final PropertyKey.Builder keyBuilder = accessor.keyBuilder();
-    RiemannAlertProxy proxy = new RiemannAlertProxy(proxyPort, baseAccessor);
-    proxy.start();
 
     // Start monitoring server
     int riemannPort = MonitoringTestHelper.availableTcpPort();
@@ -99,12 +99,12 @@ public class IntegrationTest extends ZkUnitTestBase {
     riemannConfig.setConfig(MonitoringTestHelper.getRiemannConfigString(riemannPort));
 
     MonitoringConfig latencyCheckConfig = new MonitoringConfig("check_latency_config.clj");
-    latencyCheckConfig.setConfig(MonitoringTestHelper.getLatencyCheckConfigString(proxyPort));
+    latencyCheckConfig.setConfig(MonitoringTestHelper.getLatencyCheckConfigString(ZK_ADDR));
 
     // Set monitoring config on zk
-    accessor.setProperty(keyBuilder.monitoringConfig(RiemannConfigs.DEFAULT_RIEMANN_CONFIG),
+    accessor.setProperty(keyBuilder.monitoringConfig(riemannConfig.getId()),
         riemannConfig);
-    accessor.setProperty(keyBuilder.monitoringConfig("check_latency_config.clj"),
+    accessor.setProperty(keyBuilder.monitoringConfig(latencyCheckConfig.getId()),
         latencyCheckConfig);
 
     RiemannConfigs.Builder riemannConfigBuilder =
@@ -122,12 +122,7 @@ public class IntegrationTest extends ZkUnitTestBase {
     Assert.assertNotNull(liveInstances);
     Assert.assertEquals(liveInstances.size(), 1);
 
-    // Check external-view
-    boolean result =
-        ClusterStateVerifier
-            .verifyByZkCallback(new ClusterStateVerifier.BestPossAndExtViewZkVerifier(ZK_ADDR,
-                clusterName));
-    Assert.assertTrue(result);
+    boolean result;
 
     // Setup mock storage cluster to be monitored
     String storageClusterName = clusterName + "_storage";
@@ -170,16 +165,15 @@ public class IntegrationTest extends ZkUnitTestBase {
     Assert.assertTrue(instanceConfig.getInstanceEnabled());
 
     // Connect monitoring client
-    final RiemannMonitoringClient rclient =
-        new RiemannMonitoringClient(ZK_ADDR, ClusterId.from(clusterName),
-            ResourceId.from("MonitoringService0"), 1);
+    final RiemannClientWrapper rclient =
+        new RiemannClientWrapper(Arrays.asList("localhost:" + riemannPort));
     rclient.connect();
 
     MonitoringEvent event =
         new MonitoringEvent().participant(ParticipantId.from("localhost_12918"))
             .name("LatencyReport").attribute("latency95", "" + 2)
             .attribute("cluster", storageClusterName);
-    rclient.send(ResourceId.from("TestDB0"), event, false);
+    rclient.send(event);
 
     // Check localhost_12918 is disabled
     result = TestHelper.verify(new TestHelper.Verifier() {
@@ -200,7 +194,6 @@ public class IntegrationTest extends ZkUnitTestBase {
 
     agent.shutdown();
     server.stop();
-    proxy.shutdown();
     System.out.println("END " + clusterName + " at " + new Date(System.currentTimeMillis()));
   }
 }

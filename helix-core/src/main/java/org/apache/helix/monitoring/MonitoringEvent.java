@@ -19,10 +19,14 @@ package org.apache.helix.monitoring;
  * under the License.
  */
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
+import org.apache.helix.api.Scope;
+import org.apache.helix.api.Scope.ScopeType;
 import org.apache.helix.api.id.ClusterId;
 import org.apache.helix.api.id.ControllerId;
 import org.apache.helix.api.id.ParticipantId;
@@ -32,6 +36,7 @@ import org.apache.helix.api.id.SpectatorId;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 
 /**
  * A generic monitoring event based on Helix constructs. This is based on Riemann's EventDSL.
@@ -49,8 +54,10 @@ public class MonitoringEvent {
   private Float _floatMetric;
   private Double _doubleMetric;
   private Float _ttl;
-  private List<String> _tags;
-  private Map<String, String> _attributes;
+  private final List<String> _tags;
+  private final Map<String, String> _attributes;
+  private String _shardingStr;
+  private final Set<ScopeType> _shardingScopes;
 
   /**
    * Create an empty MonitoringEvent
@@ -70,6 +77,8 @@ public class MonitoringEvent {
     _ttl = null;
     _tags = Lists.newLinkedList();
     _attributes = Maps.newHashMap();
+    _shardingStr = null;
+    _shardingScopes = Sets.newHashSet();
   }
 
   /**
@@ -253,13 +262,69 @@ public class MonitoringEvent {
     return this;
   }
 
-  // below are a set of package-private getters for each of the fields
+  /**
+   * Set sharding key using string
+   * @param shardingStr
+   * @return MonitoringEvent
+   */
+  public MonitoringEvent shardingString(String shardingStr) {
+    _shardingStr = shardingStr;
+    return this;
+  }
 
-  String host() {
+  /**
+   * Set sharding key using scopes
+   * @param scopes
+   * @return MonitoringEvent
+   */
+  public MonitoringEvent shardingScopes(ScopeType... scopes) {
+    _shardingScopes.clear();
+    _shardingScopes.addAll(Arrays.asList(scopes));
+    return this;
+  }
+
+  /**
+   * Return sharding key which is used by MonitoringClient to choose MonitoringServer
+   * @return sharding key
+   */
+  public String shardingKey() {
+    // if shardingStr exists, use shardingStr
+    if (_shardingStr != null) {
+      return _shardingStr;
+    }
+
+    // if shardingStr doesn't exist, use shardingScopes
+    if (_shardingScopes.isEmpty()) {
+      _shardingScopes.addAll(Arrays.asList(ScopeType.CLUSTER, ScopeType.RESOURCE));
+    }
+
+    StringBuilder sb = new StringBuilder();
+    if (_shardingScopes.contains(ScopeType.CLUSTER)) {
+      sb.append(_clusterId == null ? "%" : _clusterId.stringify());
+    }
+    if (_shardingScopes.contains(ScopeType.RESOURCE)) {
+      sb.append("|");
+      sb.append(_resourceId == null ? "%" : _resourceId.stringify());
+    }
+    if (_shardingScopes.contains(ScopeType.PARTITION)) {
+      sb.append("|");
+      sb.append(_partitionId == null ? "%" : _partitionId.stringify());
+    }
+    if (_shardingScopes.contains(ScopeType.PARTICIPANT)) {
+      sb.append("|");
+      sb.append(_host == null ? "%" : _host);
+    }
+
+    return sb.toString();
+  }
+
+  // below are used for converting MonitoringEvent to Riemann EventDSL
+
+  public String host() {
     return _host;
   }
 
-  String service() {
+  public String service() {
     if (_clusterId == null) {
       _clusterId = ClusterId.from("%");
     }
@@ -269,42 +334,45 @@ public class MonitoringEvent {
     if (_partitionId == null) {
       _partitionId = PartitionId.from("%");
     }
+    if (_name == null) {
+      _name = "%";
+    }
     return String.format("%s|%s|%s|%s", _clusterId, _resourceId, _partitionId, _name);
   }
 
-  String eventState() {
+  public String eventState() {
     return _eventState;
   }
 
-  String description() {
+  public String description() {
     return _description;
   }
 
-  Long time() {
+  public Long time() {
     return _time;
   }
 
-  Long longMetric() {
+  public Long longMetric() {
     return _longMetric;
   }
 
-  Float floatMetric() {
+  public Float floatMetric() {
     return _floatMetric;
   }
 
-  Double doubleMetric() {
+  public Double doubleMetric() {
     return _doubleMetric;
   }
 
-  Float ttl() {
+  public Float ttl() {
     return _ttl;
   }
 
-  List<String> tags() {
+  public List<String> tags() {
     return _tags;
   }
 
-  Map<String, String> attributes() {
+  public Map<String, String> attributes() {
     return _attributes;
   }
 }
