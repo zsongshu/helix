@@ -24,24 +24,49 @@ import java.util.List;
 
 import org.apache.helix.HelixException;
 import org.apache.helix.ZNRecord;
+import org.apache.helix.manager.zk.ZkBaseDataAccessor;
 import org.apache.helix.manager.zk.ZkClient;
+import org.apache.helix.tools.ClusterSetup;
 import org.apache.helix.webapp.RestAdminApplication;
 import org.apache.log4j.Logger;
 import org.apache.zookeeper.data.Stat;
+import org.restlet.Context;
 import org.restlet.data.MediaType;
+import org.restlet.data.Request;
+import org.restlet.data.Response;
 import org.restlet.data.Status;
-import org.restlet.representation.Representation;
-import org.restlet.representation.StringRepresentation;
-import org.restlet.representation.Variant;
-import org.restlet.resource.ServerResource;
+import org.restlet.resource.Representation;
+import org.restlet.resource.Resource;
+import org.restlet.resource.StringRepresentation;
+import org.restlet.resource.Variant;
 
-public class ZkPathResource extends ServerResource {
+public class ZkPathResource extends Resource {
   private final static Logger LOG = Logger.getLogger(ZkPathResource.class);
 
-  public ZkPathResource() {
+  public ZkPathResource(Context context, Request request, Response response) {
+    super(context, request, response);
     getVariants().add(new Variant(MediaType.TEXT_PLAIN));
     getVariants().add(new Variant(MediaType.APPLICATION_JSON));
-    setNegotiated(false);
+  }
+
+  @Override
+  public boolean allowGet() {
+    return true;
+  }
+
+  @Override
+  public boolean allowPost() {
+    return true;
+  }
+
+  @Override
+  public boolean allowPut() {
+    return false;
+  }
+
+  @Override
+  public boolean allowDelete() {
+    return true;
   }
 
   private String getZKPath() {
@@ -59,7 +84,7 @@ public class ZkPathResource extends ServerResource {
   }
 
   @Override
-  public Representation post(Representation entity) {
+  public void acceptRepresentation(Representation entity) {
     String zkPath = getZKPath();
 
     try {
@@ -89,11 +114,10 @@ public class ZkPathResource extends ServerResource {
       getResponse().setStatus(Status.SUCCESS_OK);
       LOG.error("Error in post zkPath: " + zkPath, e);
     }
-    return null;
   }
 
   @Override
-  public Representation get() {
+  public Representation represent(Variant variant) {
     StringRepresentation presentation = null;
     String zkPath = getZKPath();
 
@@ -142,7 +166,7 @@ public class ZkPathResource extends ServerResource {
   }
 
   @Override
-  public Representation delete() {
+  public void removeRepresentations() {
     String zkPath = getZKPath();
     try {
       ZkClient zkClient =
@@ -156,7 +180,6 @@ public class ZkPathResource extends ServerResource {
       getResponse().setStatus(Status.SUCCESS_OK);
       LOG.error("Error in delete zkPath: " + zkPath, e);
     }
-    return null;
   }
 
 }

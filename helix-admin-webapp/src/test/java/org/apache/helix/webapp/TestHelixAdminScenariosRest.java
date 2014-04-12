@@ -44,7 +44,6 @@ import org.apache.helix.tools.ClusterSetup;
 import org.apache.helix.tools.ClusterStateVerifier;
 import org.apache.helix.tools.ClusterStateVerifier.BestPossAndExtViewZkVerifier;
 import org.apache.helix.tools.ClusterStateVerifier.MasterNbInExtViewVerifier;
-import org.apache.helix.webapp.RestAdminApplication;
 import org.apache.helix.webapp.resources.ClusterRepresentationUtil;
 import org.apache.helix.webapp.resources.InstancesResource.ListInstancesWrapper;
 import org.apache.helix.webapp.resources.JsonParameters;
@@ -54,13 +53,13 @@ import org.codehaus.jackson.map.JsonMappingException;
 import org.codehaus.jackson.map.ObjectMapper;
 import org.codehaus.jackson.map.SerializationConfig;
 import org.restlet.Component;
-import org.restlet.Request;
-import org.restlet.Response;
 import org.restlet.data.MediaType;
 import org.restlet.data.Method;
 import org.restlet.data.Reference;
+import org.restlet.data.Request;
+import org.restlet.data.Response;
 import org.restlet.data.Status;
-import org.restlet.representation.Representation;
+import org.restlet.resource.Representation;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
@@ -1058,7 +1057,7 @@ public class TestHelixAdminScenariosRest extends AdminTestBase {
     Request request = new Request(Method.GET, resourceRef);
     Response response = _gClient.handle(request);
     ZNRecord responseRecord =
-        ClusterRepresentationUtil.JsonToObject(ZNRecord.class, response.getEntityAsText());
+        ClusterRepresentationUtil.JsonToObject(ZNRecord.class, response.getEntity().getText());
 
     // Ensure that the tagged resource has information and the untagged one doesn't
     Assert.assertNotNull(responseRecord.getMapField("ResourceTags"));
@@ -1099,8 +1098,8 @@ public class TestHelixAdminScenariosRest extends AdminTestBase {
     Request request = new Request(Method.GET, resourceRef);
     Response response = _gClient.handle(request);
     ListInstancesWrapper responseWrapper =
-        ClusterRepresentationUtil.JsonToObject(ListInstancesWrapper.class,
-            response.getEntityAsText());
+        ClusterRepresentationUtil.JsonToObject(ListInstancesWrapper.class, response.getEntity()
+            .getText());
     Map<String, List<String>> tagInfo = responseWrapper.tagInfo;
 
     // Ensure tag ownership is reported correctly

@@ -30,23 +30,24 @@ import org.apache.helix.tools.ClusterSetup;
 import org.apache.helix.webapp.RestAdminApplication;
 import org.apache.log4j.Logger;
 import org.restlet.Context;
-import org.restlet.Request;
-import org.restlet.Response;
 import org.restlet.data.MediaType;
+import org.restlet.data.Request;
+import org.restlet.data.Response;
 import org.restlet.data.Status;
-import org.restlet.representation.Representation;
-import org.restlet.representation.StringRepresentation;
-import org.restlet.representation.Variant;
-import org.restlet.resource.ServerResource;
+import org.restlet.resource.Representation;
+import org.restlet.resource.Resource;
+import org.restlet.resource.StringRepresentation;
+import org.restlet.resource.Variant;
 
-public class ConstraintResource extends ServerResource {
+public class ConstraintResource extends Resource {
 
   private final static Logger LOG = Logger.getLogger(ConstraintResource.class);
 
-  public ConstraintResource() {
+  public ConstraintResource(Context context, Request request, Response response) {
+    super(context, request, response);
     getVariants().add(new Variant(MediaType.TEXT_PLAIN));
     getVariants().add(new Variant(MediaType.APPLICATION_JSON));
-    setNegotiated(false);
+    setModifiable(true);
   }
 
   // TODO move to a util function
@@ -55,7 +56,7 @@ public class ConstraintResource extends ServerResource {
   }
 
   @Override
-  public Representation get() {
+  public Representation represent(Variant variant) {
     StringRepresentation representation = null;
     String clusterName = getValue("clusterName");
     String constraintTypeStr = getValue("constraintType").toUpperCase();
@@ -103,7 +104,7 @@ public class ConstraintResource extends ServerResource {
   }
 
   @Override
-  public Representation post(Representation entity) {
+  public void acceptRepresentation(Representation entity) {
     String clusterName = getValue("clusterName");
     String constraintTypeStr = getValue("constraintType").toUpperCase();
     String constraintId = getValue("constraintId");
@@ -123,11 +124,10 @@ public class ConstraintResource extends ServerResource {
           MediaType.APPLICATION_JSON);
       getResponse().setStatus(Status.SUCCESS_OK);
     }
-    return null;
   }
 
   @Override
-  public Representation delete() {
+  public void removeRepresentations() {
     String clusterName = getValue("clusterName");
     String constraintTypeStr = getValue("constraintType").toUpperCase();
     String constraintId = getValue("constraintId");
@@ -145,6 +145,6 @@ public class ConstraintResource extends ServerResource {
           MediaType.APPLICATION_JSON);
       getResponse().setStatus(Status.SUCCESS_OK);
     }
-    return null;
+
   }
 }

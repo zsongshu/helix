@@ -27,22 +27,41 @@ import org.apache.helix.webapp.RestAdminApplication;
 import org.apache.log4j.Logger;
 import org.codehaus.jackson.JsonGenerationException;
 import org.codehaus.jackson.map.JsonMappingException;
+import org.restlet.Context;
 import org.restlet.data.MediaType;
-import org.restlet.representation.Representation;
-import org.restlet.representation.StringRepresentation;
-import org.restlet.representation.Variant;
-import org.restlet.resource.ServerResource;
+import org.restlet.data.Request;
+import org.restlet.data.Response;
+import org.restlet.resource.Representation;
+import org.restlet.resource.Resource;
+import org.restlet.resource.StringRepresentation;
+import org.restlet.resource.Variant;
 
-public class ErrorsResource extends ServerResource {
+public class ErrorsResource extends Resource {
   private final static Logger LOG = Logger.getLogger(ErrorsResource.class);
 
-  public ErrorsResource() {
+  public ErrorsResource(Context context, Request request, Response response) {
+    super(context, request, response);
     getVariants().add(new Variant(MediaType.TEXT_PLAIN));
     getVariants().add(new Variant(MediaType.APPLICATION_JSON));
-    setNegotiated(false);
   }
 
-  public Representation get() {
+  public boolean allowGet() {
+    return true;
+  }
+
+  public boolean allowPost() {
+    return false;
+  }
+
+  public boolean allowPut() {
+    return false;
+  }
+
+  public boolean allowDelete() {
+    return false;
+  }
+
+  public Representation represent(Variant variant) {
     StringRepresentation presentation = null;
     try {
       String clusterName = (String) getRequest().getAttributes().get("clusterName");
@@ -54,7 +73,6 @@ public class ErrorsResource extends ServerResource {
 
       LOG.error("", e);
     }
-    
     return presentation;
   }
 

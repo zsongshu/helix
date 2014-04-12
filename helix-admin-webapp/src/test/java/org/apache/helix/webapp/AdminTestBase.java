@@ -27,7 +27,6 @@ import org.apache.helix.manager.zk.ZNRecordSerializer;
 import org.apache.helix.manager.zk.ZkClient;
 import org.apache.helix.tools.ClusterSetup;
 import org.apache.helix.util.ZKClientPool;
-import org.apache.helix.webapp.AdminTestHelper.AdminThread;
 import org.apache.log4j.Logger;
 import org.restlet.Client;
 import org.restlet.data.Protocol;
@@ -45,7 +44,7 @@ public class AdminTestBase {
   protected static ClusterSetup _gSetupTool;
   protected static Client _gClient;
 
-  static AdminThread _adminThread;
+  static AdminTestHelper.AdminThread _adminThread;
 
   @BeforeSuite
   public void beforeSuite() throws Exception {
@@ -63,7 +62,7 @@ public class AdminTestBase {
     _gSetupTool = new ClusterSetup(ZK_ADDR);
 
     // start admin
-    _adminThread = new AdminThread(ZK_ADDR, ADMIN_PORT);
+    _adminThread = new AdminTestHelper.AdminThread(ZK_ADDR, ADMIN_PORT);
     _adminThread.start();
 
     // create a client

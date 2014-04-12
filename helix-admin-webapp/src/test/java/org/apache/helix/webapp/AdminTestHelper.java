@@ -21,8 +21,6 @@ package org.apache.helix.webapp;
 
 import java.util.concurrent.CountDownLatch;
 
-import org.apache.helix.webapp.HelixAdminWebApp;
-
 public class AdminTestHelper {
 
   public static class AdminThread {

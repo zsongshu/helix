@@ -41,32 +41,55 @@ import org.apache.helix.webapp.RestAdminApplication;
 import org.apache.log4j.Logger;
 import org.codehaus.jackson.JsonGenerationException;
 import org.codehaus.jackson.map.JsonMappingException;
+import org.restlet.Context;
 import org.restlet.data.Form;
 import org.restlet.data.MediaType;
+import org.restlet.data.Request;
+import org.restlet.data.Response;
 import org.restlet.data.Status;
-import org.restlet.representation.Representation;
-import org.restlet.representation.StringRepresentation;
-import org.restlet.representation.Variant;
-import org.restlet.resource.ServerResource;
+import org.restlet.resource.Representation;
+import org.restlet.resource.Resource;
+import org.restlet.resource.StringRepresentation;
+import org.restlet.resource.Variant;
 
 /**
  * This resource can be used to send scheduler tasks to the controller.
  */
-public class SchedulerTasksResource extends ServerResource {
+public class SchedulerTasksResource extends Resource {
   private final static Logger LOG = Logger.getLogger(SchedulerTasksResource.class);
 
   public static String CRITERIA = "Criteria";
   public static String MESSAGETEMPLATE = "MessageTemplate";
   public static String TASKQUEUENAME = "TaskQueueName";
 
-  public SchedulerTasksResource() {
+  public SchedulerTasksResource(Context context, Request request, Response response) {
+    super(context, request, response);
     getVariants().add(new Variant(MediaType.TEXT_PLAIN));
     getVariants().add(new Variant(MediaType.APPLICATION_JSON));
-    setNegotiated(false);
   }
 
   @Override
-  public Representation get() {
+  public boolean allowGet() {
+    return true;
+  }
+
+  @Override
+  public boolean allowPost() {
+    return true;
+  }
+
+  @Override
+  public boolean allowPut() {
+    return false;
+  }
+
+  @Override
+  public boolean allowDelete() {
+    return false;
+  }
+
+  @Override
+  public Representation represent(Variant variant) {
     StringRepresentation presentation = null;
     try {
       presentation = getSchedulerTasksRepresentation();
@@ -103,7 +126,7 @@ public class SchedulerTasksResource extends ServerResource {
   }
 
   @Override
-  public Representation post(Representation entity) {
+  public void acceptRepresentation(Representation entity) {
     try {
       String clusterName = (String) getRequest().getAttributes().get("clusterName");
       Form form = new Form(entity);
@@ -171,6 +194,5 @@ public class SchedulerTasksResource extends ServerResource {
       getResponse().setStatus(Status.SUCCESS_OK);
       LOG.error("", e);
     }
-    return null;
   }
 }

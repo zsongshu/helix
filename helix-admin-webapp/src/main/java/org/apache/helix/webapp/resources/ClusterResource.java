@@ -20,38 +20,57 @@ package org.apache.helix.webapp.resources;
  */
 
 import java.io.IOException;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import org.apache.helix.HelixDataAccessor;
 import org.apache.helix.HelixException;
-import org.apache.helix.PropertyKey.Builder;
 import org.apache.helix.ZNRecord;
+import org.apache.helix.PropertyKey.Builder;
 import org.apache.helix.manager.zk.ZkClient;
 import org.apache.helix.model.LiveInstance;
 import org.apache.helix.tools.ClusterSetup;
 import org.apache.helix.webapp.RestAdminApplication;
 import org.codehaus.jackson.JsonGenerationException;
 import org.codehaus.jackson.map.JsonMappingException;
+import org.restlet.Context;
 import org.restlet.data.MediaType;
-import org.restlet.data.Method;
+import org.restlet.data.Request;
+import org.restlet.data.Response;
 import org.restlet.data.Status;
-import org.restlet.representation.Representation;
-import org.restlet.representation.StringRepresentation;
-import org.restlet.representation.Variant;
-import org.restlet.resource.ServerResource;
+import org.restlet.resource.Representation;
+import org.restlet.resource.Resource;
+import org.restlet.resource.StringRepresentation;
+import org.restlet.resource.Variant;
 
-public class ClusterResource extends ServerResource {
-    
-  public ClusterResource() {
+public class ClusterResource extends Resource {
+  public ClusterResource(Context context, Request request, Response response) {
+    super(context, request, response);
     getVariants().add(new Variant(MediaType.TEXT_PLAIN));
     getVariants().add(new Variant(MediaType.APPLICATION_JSON));
-    setNegotiated(false);
   }
 
   @Override
-  public Representation get() {
+  public boolean allowGet() {
+    return true;
+  }
+
+  @Override
+  public boolean allowPost() {
+    return true;
+  }
+
+  @Override
+  public boolean allowPut() {
+    return false;
+  }
+
+  @Override
+  public boolean allowDelete() {
+    return true;
+  }
+
+  @Override
+  public Representation represent(Variant variant) {
     StringRepresentation presentation = null;
     try {
       String clusterName = (String) getRequest().getAttributes().get("clusterName");
@@ -61,6 +80,7 @@ public class ClusterResource extends ServerResource {
     catch (Exception e) {
       String error = ClusterRepresentationUtil.getErrorAsJsonStringFromException(e);
       presentation = new StringRepresentation(error, MediaType.APPLICATION_JSON);
+
       e.printStackTrace();
     }
     return presentation;
@@ -101,7 +121,7 @@ public class ClusterResource extends ServerResource {
   }
 
   @Override
-  public Representation post(Representation entity) {
+  public void acceptRepresentation(Representation entity) {
     try {
       String clusterName = (String) getRequest().getAttributes().get("clusterName");
       ZkClient zkClient =
@@ -140,11 +160,10 @@ public class ClusterResource extends ServerResource {
           MediaType.APPLICATION_JSON);
       getResponse().setStatus(Status.SUCCESS_OK);
     }
-    return getResponseEntity();
   }
 
   @Override
-  public Representation delete() {
+  public void removeRepresentations() {
     try {
       String clusterName = (String) getRequest().getAttributes().get("clusterName");
       ZkClient zkClient =
@@ -157,6 +176,5 @@ public class ClusterResource extends ServerResource {
           MediaType.APPLICATION_JSON);
       getResponse().setStatus(Status.SUCCESS_OK);
     }
-    return null;
   }
 }
