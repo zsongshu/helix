@@ -98,6 +98,8 @@ public class ClusterSetup {
   public static final String addInstanceTag = "addInstanceTag";
   public static final String removeInstanceTag = "removeInstanceTag";
 
+  public static final String enableResource = "enableResource";
+
   // Query info (TBD in V2)
   public static final String listClusterInfo = "listClusterInfo";
   public static final String listInstanceInfo = "listInstanceInfo";
@@ -741,6 +743,11 @@ public class ClusterSetup {
     dropResourceOption.setRequired(false);
     dropResourceOption.setArgName("clusterName resourceName");
 
+    Option enableResourceOption =
+        OptionBuilder.withLongOpt(enableResource).withDescription("Enable/disable a resource")
+            .hasArgs(3).isRequired(false).withArgName("clusterName resourceName true/false")
+            .create();
+
     Option rebalanceOption =
         OptionBuilder.withLongOpt(rebalance).withDescription("Rebalance a resource in a cluster")
             .create();
@@ -791,11 +798,11 @@ public class ClusterSetup {
     partitionInfoOption.setArgName("clusterName resourceName partitionName");
 
     Option enableInstanceOption =
-        OptionBuilder.withLongOpt(enableInstance).withDescription("Enable/disable a Instance")
+        OptionBuilder.withLongOpt(enableInstance).withDescription("Enable/disable an instance")
             .create();
     enableInstanceOption.setArgs(3);
     enableInstanceOption.setRequired(false);
-    enableInstanceOption.setArgName("clusterName InstanceName true/false");
+    enableInstanceOption.setArgName("clusterName instanceName true/false");
 
     Option enablePartitionOption =
         OptionBuilder.hasArgs().withLongOpt(enablePartition)
@@ -951,6 +958,7 @@ public class ClusterSetup {
     group.addOption(dropInstanceOption);
     group.addOption(swapInstanceOption);
     group.addOption(dropResourceOption);
+    group.addOption(enableResourceOption);
     group.addOption(instanceInfoOption);
     group.addOption(clusterInfoOption);
     group.addOption(resourceInfoOption);
@@ -1254,6 +1262,12 @@ public class ClusterSetup {
 
       setupTool.getClusterManagementTool().enableInstance(clusterName, instanceName, enabled);
       return 0;
+    } else if (cmd.hasOption(enableResource)) {
+      String clusterName = cmd.getOptionValues(enableResource)[0];
+      String resourceName = cmd.getOptionValues(enableResource)[1];
+      boolean enabled = Boolean.parseBoolean(cmd.getOptionValues(enableResource)[2].toLowerCase());
+
+      setupTool.getClusterManagementTool().enableResource(clusterName, resourceName, enabled);
     } else if (cmd.hasOption(enablePartition)) {
       String[] args = cmd.getOptionValues(enablePartition);
 

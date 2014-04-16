@@ -147,18 +147,18 @@ public class TestAutoRebalanceStrategy {
     private static final double P_RESURRECT = 0.45;
     private static final String RESOURCE_NAME = "resource";
 
-    private List<String> _partitions;
-    private LinkedHashMap<String, Integer> _states;
-    private List<String> _liveNodes;
-    private Set<String> _liveSet;
-    private Set<String> _removedSet;
-    private Set<String> _nonLiveSet;
+    private final List<String> _partitions;
+    private final LinkedHashMap<String, Integer> _states;
+    private final List<String> _liveNodes;
+    private final Set<String> _liveSet;
+    private final Set<String> _removedSet;
+    private final Set<String> _nonLiveSet;
     private Map<String, Map<String, String>> _currentMapping;
-    private List<String> _allNodes;
-    private int _maxPerNode;
-    private StateModelDefinition _stateModelDef;
-    private ReplicaPlacementScheme _placementScheme;
-    private Random _random;
+    private final List<String> _allNodes;
+    private final int _maxPerNode;
+    private final StateModelDefinition _stateModelDef;
+    private final ReplicaPlacementScheme _placementScheme;
+    private final Random _random;
 
     public AutoRebalanceTester(List<String> partitions, LinkedHashMap<String, Integer> states,
         List<String> liveNodes, Map<String, Map<String, String>> currentMapping,
@@ -230,7 +230,7 @@ public class TestAutoRebalanceStrategy {
         Set<String> disabled = Collections.emptySet();
         Map<String, String> assignment =
             ConstraintBasedAssignment.computeAutoBestStateForPartition(cache, _stateModelDef,
-                preferenceList, currentStateMap, disabled);
+                preferenceList, currentStateMap, disabled, true);
         mapResult.put(partition, assignment);
       }
       return mapResult;
