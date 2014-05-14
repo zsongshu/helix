@@ -355,12 +355,12 @@ public class HelixTaskExecutor implements MessageListener, TaskExecutor {
     pool.shutdown(); // Disable new tasks from being submitted
     try {
       // Wait a while for existing tasks to terminate
-      if (!pool.awaitTermination(200, TimeUnit.MICROSECONDS)) {
+      if (!pool.awaitTermination(200, TimeUnit.MILLISECONDS)) {
         List<Runnable> waitingTasks = pool.shutdownNow(); // Cancel currently executing tasks
         LOG.info("Tasks that never commenced execution: " + waitingTasks);
 
         // Wait a while for tasks to respond to being cancelled
-        if (!pool.awaitTermination(200, TimeUnit.MICROSECONDS)) {
+        if (!pool.awaitTermination(200, TimeUnit.MILLISECONDS)) {
           LOG.error("Pool did not fully terminate in 200ms. pool: " + pool);
         }
       }
