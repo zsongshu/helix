@@ -312,37 +312,6 @@ public class ClusterDataCache {
     }
   }
 
-  // public HealthStat getGlobalStats()
-  // {
-  // return _globalStats;
-  // }
-  //
-  // public PersistentStats getPersistentStats()
-  // {
-  // return _persistentStats;
-  // }
-  //
-  // public Alerts getAlerts()
-  // {
-  // return _alerts;
-  // }
-  //
-  // public AlertStatus getAlertStatus()
-  // {
-  // return _alertStatus;
-  // }
-  //
-  // public Map<String, HealthStat> getHealthStats(String instanceName)
-  // {
-  // Map<String, HealthStat> map = _healthStatMap.get(instanceName);
-  // if (map != null)
-  // {
-  // return map;
-  // } else
-  // {
-  // return Collections.emptyMap();
-  // }
-  // }
   /**
    * Provides the state model definition for a given state model
    * @param stateModelDefRef
@@ -351,6 +320,14 @@ public class ClusterDataCache {
   public StateModelDefinition getStateModelDef(String stateModelDefRef) {
 
     return _stateModelDefMap.get(stateModelDefRef);
+  }
+
+  /**
+   * Provides all state model definitions
+   * @return state model definition map
+   */
+  public Map<String, StateModelDefinition> getStateModelDefMap() {
+    return _stateModelDefMap;
   }
 
   /**
