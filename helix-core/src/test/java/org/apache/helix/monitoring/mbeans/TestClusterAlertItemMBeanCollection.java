@@ -22,7 +22,6 @@ package org.apache.helix.monitoring.mbeans;
 import java.io.IOException;
 import java.io.StringReader;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import javax.management.AttributeNotFoundException;
@@ -32,14 +31,12 @@ import javax.management.MBeanException;
 import javax.management.MalformedObjectNameException;
 import javax.management.ReflectionException;
 
-import org.apache.helix.ZNRecord;
 import org.apache.helix.alerts.AlertValueAndStatus;
 import org.apache.helix.alerts.Tuple;
 import org.apache.helix.healthcheck.TestWildcardAlert.TestClusterMBeanObserver;
 import org.apache.helix.monitoring.mbeans.ClusterAlertMBeanCollection;
 import org.apache.log4j.Logger;
 import org.codehaus.jackson.map.ObjectMapper;
-import org.codehaus.jackson.type.TypeReference;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
@@ -47,7 +44,7 @@ public class TestClusterAlertItemMBeanCollection {
   private static final Logger _logger = Logger.getLogger(TestClusterAlertItemMBeanCollection.class);
 
   @Test
-  public void TestAlertReportingHistory() throws InstanceNotFoundException,
+  public void testAlertReportingHistory() throws InstanceNotFoundException,
       MalformedObjectNameException, NullPointerException, IOException, IntrospectionException,
       AttributeNotFoundException, ReflectionException, MBeanException {
     ClusterAlertMBeanCollection beanCollection = new ClusterAlertMBeanCollection();
@@ -226,7 +223,7 @@ public class TestClusterAlertItemMBeanCollection {
   }
 
   @Test
-  public void TestAlertRefresh() throws InstanceNotFoundException, MalformedObjectNameException,
+  public void testAlertRefresh() throws InstanceNotFoundException, MalformedObjectNameException,
       NullPointerException, IOException, IntrospectionException, AttributeNotFoundException,
       ReflectionException, MBeanException, InterruptedException {
     ClusterAlertMBeanCollection beanCollection = new ClusterAlertMBeanCollection();

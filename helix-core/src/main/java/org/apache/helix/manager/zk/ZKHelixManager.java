@@ -138,11 +138,9 @@ public class ZKHelixManager implements HelixManager, IZkStateListener {
    */
   static class StatusDumpTask extends HelixTimerTask {
     Timer _timer = null;
-    final ZkClient zkclient;
     final HelixManager helixController;
 
-    public StatusDumpTask(ZkClient zkclient, HelixManager helixController) {
-      this.zkclient = zkclient;
+    public StatusDumpTask(HelixManager helixController) {
       this.helixController = helixController;
     }
 
@@ -155,8 +153,8 @@ public class ZKHelixManager implements HelixManager, IZkStateListener {
       if (_timer == null) {
         LOG.info("Start StatusDumpTask");
         _timer = new Timer("StatusDumpTimerTask", true);
-        _timer.scheduleAtFixedRate(new ZKPathDataDumpTask(helixController, zkclient,
-            timeThresholdNoChange), initialDelay, period);
+        _timer.scheduleAtFixedRate(new ZKPathDataDumpTask(helixController, timeThresholdNoChange),
+            initialDelay, period);
       }
     }
 
@@ -230,7 +228,7 @@ public class ZKHelixManager implements HelixManager, IZkStateListener {
       _stateMachineEngine = null;
       _participantHealthInfoCollector = null;
       _controllerTimerTasks.add(new HealthStatsAggregationTask(new HealthStatsAggregator(this)));
-      _controllerTimerTasks.add(new StatusDumpTask(_zkclient, this));
+      _controllerTimerTasks.add(new StatusDumpTask(this));
 
       break;
     case CONTROLLER_PARTICIPANT:
@@ -241,7 +239,7 @@ public class ZKHelixManager implements HelixManager, IZkStateListener {
       _timerTasks.add(new ParticipantHealthReportTask(_participantHealthInfoCollector));
 
       _controllerTimerTasks.add(new HealthStatsAggregationTask(new HealthStatsAggregator(this)));
-      _controllerTimerTasks.add(new StatusDumpTask(_zkclient, this));
+      _controllerTimerTasks.add(new StatusDumpTask(this));
 
       break;
     case ADMINISTRATOR:
@@ -627,8 +625,8 @@ public class ZKHelixManager implements HelixManager, IZkStateListener {
       String path = PropertyPathConfig.getPath(PropertyType.PROPERTYSTORE, _clusterName);
       String fallbackPath = String.format("/%s/%s", _clusterName, "HELIX_PROPERTYSTORE");
       _helixPropertyStore =
-          new AutoFallbackPropertyStore<ZNRecord>(new ZkBaseDataAccessor<ZNRecord>(_zkclient), path,
-              fallbackPath);
+          new AutoFallbackPropertyStore<ZNRecord>(new ZkBaseDataAccessor<ZNRecord>(_zkclient),
+              path, fallbackPath);
     }
 
     return _helixPropertyStore;

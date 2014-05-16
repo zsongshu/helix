@@ -122,30 +122,6 @@ public class MockHealthReportParticipant {
     }
   }
 
-  static class MockHealthReportJob implements MockJobIntf {
-
-    @Override
-    public void doPreConnectJob(HelixManager manager) {
-      // TODO Auto-generated method stub
-
-    }
-
-    @Override
-    public void doPostConnectJob(HelixManager manager) {
-      // TODO Auto-generated method stub
-      manager.getHealthReportCollector().addHealthReportProvider(new MockHealthReportProvider());
-
-      // // set property store path for perf test
-      // final String setPath = "/TEST_PERF/set";
-      // final String updatePath = "/TEST_PERF/update";
-      // manager.getHelixPropertyStore().create(setPath, new ZNRecord(setPath),
-      // BaseDataAccessor.Option.PERSISTENT);
-      // manager.getHelixPropertyStore().set(updatePath, new ZNRecord(updatePath),
-      // BaseDataAccessor.Option.PERSISTENT);
-    }
-
-  }
-
   // hack OptionBuilder is not thread safe
   @SuppressWarnings("static-access")
   synchronized private static Options constructCommandLineOptions() {

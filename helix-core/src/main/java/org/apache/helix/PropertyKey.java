@@ -418,6 +418,15 @@ public class PropertyKey {
     }
 
     /**
+     * Get a property key associated with {@link StatusUpdate} of an instance
+     * @param instanceName
+     * @return {@link PropertyKey}
+     */
+    public PropertyKey stateTransitionStatus(String instanceName) {
+      return new PropertyKey(STATUSUPDATES, StatusUpdate.class, _clusterName, instanceName);
+    }
+
+    /**
      * Used to get status update for a NON STATE TRANSITION type
      * @param instanceName
      * @param sessionId
@@ -458,6 +467,15 @@ public class PropertyKey {
         String resourceName) {
       return new PropertyKey(ERRORS, Error.class, _clusterName, instanceName, sessionId,
           resourceName);
+    }
+
+    /**
+     * Get a property key associated with {@link Error} of an instance
+     * @param instanceName
+     * @return {@link PropertyKey}
+     */
+    public PropertyKey stateTransitionErrors(String instanceName) {
+      return new PropertyKey(ERRORS, Error.class, _clusterName, instanceName);
     }
 
     /**
@@ -512,6 +530,14 @@ public class PropertyKey {
      */
     public PropertyKey controllerTaskError(String errorId) {
       return new PropertyKey(ERRORS_CONTROLLER, Error.class, _clusterName, errorId);
+    }
+
+    /**
+     * Get a property key associated with {@link StatusUpdate} of controller status updates
+     * @return {@link PropertyKey}
+     */
+    public PropertyKey controllerTaskStatuses() {
+      return new PropertyKey(STATUSUPDATES_CONTROLLER, StatusUpdate.class, _clusterName);
     }
 
     /**
