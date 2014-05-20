@@ -152,7 +152,7 @@ public class ZKHelixDataAccessor implements HelixDataAccessor, ControllerChangeL
     boolean success = false;
     switch (type) {
     case CURRENTSTATES:
-      success = _groupCommit.commit(_baseDataAccessor, options, path, value.getRecord());
+      success = _groupCommit.commit(_baseDataAccessor, options, path, value.getRecord(), true);
       break;
     default:
       if (type.usePropertyTransferServer()) {
