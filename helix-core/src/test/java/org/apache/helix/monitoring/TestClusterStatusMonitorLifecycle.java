@@ -257,7 +257,7 @@ public class TestClusterStatusMonitorLifecycle extends ZkIntegrationTestBase {
     // Unregister 5 per-instance resource mbean
     setupTool.dropResourceFromCluster(_firstClusterName, "TestDB1");
     Thread.sleep(1000);
-    Assert.assertTrue(nMbeansUnregistered == listener._nMbeansUnregistered - 18);
+    Assert.assertTrue(nMbeansUnregistered == listener._nMbeansUnregistered - 19);
     Assert.assertTrue(nMbeansRegistered == listener._nMbeansRegistered - 18);
 
   }
